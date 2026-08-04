@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Icone, Painel, Vazio } from '../components/ui'
+import { BotaoOlho, Icone, Painel, Vazio, ocultar, useValores } from '../components/ui'
 import { useDados } from '../lib/store'
 import { movimentosRecentes } from '../lib/db'
 import { useAuth } from '../lib/auth'
@@ -19,6 +19,7 @@ const FILTROS = [
 export default function Estoque () {
   const dados = useDados()
   const { ehFarmaceutico } = useAuth()
+  const valores = useValores()
   const [estoqueId, setEstoqueId] = useState('')  // vazio = todos
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('comSaldo')
@@ -126,10 +127,17 @@ export default function Estoque () {
         </div>
         {ehFarmaceutico && (
           <div className="indicador">
-            <div className="n num" style={{ fontSize: 19 }}>{formatarMoeda(valorTotal)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div className="n num" style={{ fontSize: 19 }}>
+                {ocultar(formatarMoeda(valorTotal), valores.visivel)}
+              </div>
+              <div style={{ marginLeft: 'auto' }}>
+                <BotaoOlho visivel={valores.visivel} aoAlternar={valores.alternar} />
+              </div>
+            </div>
             <div className="r">
               valor de contrato
-              {semPreco ? ` · ${semPreco} sem preço` : ''}
+              {valores.visivel && semPreco ? ` · ${semPreco} sem preço` : ''}
             </div>
           </div>
         )}
@@ -183,6 +191,7 @@ export default function Estoque () {
         <DetalheItem
           item={detalhe} estoqueId={estoqueId}
           mostrarPreco={ehFarmaceutico}
+          valores={valores}
           aoFechar={() => setDetalhe(null)}
         />
       )}
@@ -190,7 +199,7 @@ export default function Estoque () {
   )
 }
 
-function DetalheItem ({ item, estoqueId, mostrarPreco, aoFechar }) {
+function DetalheItem ({ item, estoqueId, mostrarPreco, valores, aoFechar }) {
   const dados = useDados()
   const [historico, setHistorico] = useState(null)
 
@@ -224,12 +233,15 @@ function DetalheItem ({ item, estoqueId, mostrarPreco, aoFechar }) {
         <Linha titulo="Posologia de referência" valor={item.posologia} />
         <Linha titulo="Indicação" valor={item.indicacao} />
         <Linha titulo="Efeitos adversos comuns" valor={item.efeitosAdversos} />
-        {mostrarPreco && (
-          <Linha titulo="Preço de contrato" valor={
-            precoDe(item) === null
-              ? null
-              : `${formatarMoeda(precoDe(item))} · contrato ${item.contrato || 'não informado'}`
-          } />
+        {mostrarPreco && precoDe(item) !== null && (
+          <div>
+            <dt className="rotulo" style={{ marginBottom: 2 }}>Preço de contrato</dt>
+            <dd style={{ margin: 0, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="num">{ocultar(formatarMoeda(precoDe(item)), valores.visivel)}</span>
+              <span className="dica">· contrato {item.contrato || 'não informado'}</span>
+              <BotaoOlho visivel={valores.visivel} aoAlternar={valores.alternar} />
+            </dd>
+          </div>
         )}
         <Linha titulo="Estoque mínimo" valor={item.estoqueMinimo ? `${item.estoqueMinimo} ${item.unidade?.toLowerCase()}` : 'não definido'} />
       </dl>

@@ -29,7 +29,9 @@ e publicação no Firebase Hosting.
 - **Preços** — o sistema valoriza estoque e pedido **apenas pelo preço de contrato**,
   que é o que a unidade paga. O PMVG fica guardado no catálogo só como referência de
   mercado e não entra em nenhum total. Valores aparecem somente para farmacêutico e
-  administrador, e não saem no arquivo do pedido.
+  administrador, e não saem no arquivo do pedido. Na tela eles nascem ocultos, atrás
+  de um ícone de olho — o balcão costuma ter gente por perto. A escolha vale enquanto
+  a sessão durar e volta a ocultar quando o app é fechado.
 - **Pedido** — sugestão de reposição combinando estoque mínimo e consumo médio:
   `necessidade = maior valor entre (estoque mínimo) e (consumo diário × dias × margem)`,
   descontando o saldo atual. Exporta CSV e copia a lista pronta.

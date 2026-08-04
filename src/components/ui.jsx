@@ -30,7 +30,9 @@ const TRACOS = {
   frasco: 'M9 3h6M10 3v6L5.5 17a2.5 2.5 0 0 0 2.2 4h8.6a2.5 2.5 0 0 0 2.2-4L14 9V3',
   cadeado: 'M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM8 11V7a4 4 0 1 1 8 0v4',
   etiqueta: 'M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9zM7.5 7.5h.01',
-  pessoa: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1'
+  pessoa: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',
+  olho: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  olhoFechado: 'M3 3l18 18 M10.6 10.6a3 3 0 0 0 4.3 4.3 M6.9 6.9C4.2 8.6 2 12 2 12s3.6 7 10 7c1.9 0 3.6-.5 5-1.3 M12 5c6.4 0 10 7 10 7a18 18 0 0 1-3 3.9'
 }
 
 export function Icone ({ nome, tamanho = 22, ...resto }) {
@@ -81,6 +83,53 @@ export function ProvedorAviso ({ children }) {
 }
 
 export const useAviso = () => useContext(ContextoAviso)
+
+/* =========================================================
+   Valores em dinheiro: visíveis só quando a pessoa pede
+   ========================================================= */
+
+const CHAVE_VALORES = 'mostrar-valores'
+const ouvintes = new Set()
+
+/** Começa sempre oculto: o celular costuma estar à vista de todos no balcão. */
+export function useValores () {
+  const [visivel, setVisivel] = useState(() => {
+    try { return sessionStorage.getItem(CHAVE_VALORES) === 'sim' } catch { return false }
+  })
+
+  useEffect(() => {
+    ouvintes.add(setVisivel)
+    return () => ouvintes.delete(setVisivel)
+  }, [])
+
+  const alternar = () => {
+    const novo = !visivel
+    try { sessionStorage.setItem(CHAVE_VALORES, novo ? 'sim' : 'nao') } catch (e) { /* sem armazenamento */ }
+    ouvintes.forEach(f => f(novo))
+  }
+
+  return { visivel, alternar }
+}
+
+/** Substitui o valor por pontos enquanto estiver oculto. */
+export const ocultar = (texto, visivel) => (visivel ? texto : '•'.repeat(6))
+
+export function BotaoOlho ({ visivel, aoAlternar, rotulo = 'valores' }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); aoAlternar() }}
+      aria-label={(visivel ? 'Ocultar ' : 'Mostrar ') + rotulo}
+      aria-pressed={visivel}
+      style={{
+        border: 0, background: 'none', cursor: 'pointer',
+        color: 'var(--tinta-fraca)', padding: 6, display: 'grid', placeItems: 'center',
+        minWidth: 34, minHeight: 34
+      }}
+    >
+      <Icone nome={visivel ? 'olho' : 'olhoFechado'} tamanho={19} />
+    </button>
+  )
+}
 
 /* =========================================================
    Painel deslizante

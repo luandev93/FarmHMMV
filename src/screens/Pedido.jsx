@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Icone, Vazio, useAviso } from '../components/ui'
+import { BotaoOlho, Icone, Vazio, ocultar, useAviso, useValores } from '../components/ui'
 import { useDados } from '../lib/store'
 import { consumoPorItem } from '../lib/db'
 import { useAuth } from '../lib/auth'
@@ -16,6 +16,7 @@ export default function Pedido () {
   const dados = useDados()
   const avisar = useAviso()
   const { ehFarmaceutico } = useAuth()
+  const valores = useValores()
 
   const [dias, setDias] = useState(dados.config.diasCobertura || 30)
   const [historico, setHistorico] = useState(dados.config.diasHistoricoConsumo || 90)
@@ -162,8 +163,15 @@ export default function Pedido () {
             </div>
             {ehFarmaceutico && (
               <div className="indicador">
-                <div className="n num" style={{ fontSize: 19 }}>{formatarMoeda(totalEstimado)}</div>
-                <div className="r">custo de contrato · só na tela</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div className="n num" style={{ fontSize: 19 }}>
+                    {ocultar(formatarMoeda(totalEstimado), valores.visivel)}
+                  </div>
+                  <div style={{ marginLeft: 'auto' }}>
+                    <BotaoOlho visivel={valores.visivel} aoAlternar={valores.alternar} />
+                  </div>
+                </div>
+                <div className="r">custo de contrato · não sai no arquivo</div>
               </div>
             )}
           </div>
@@ -196,7 +204,10 @@ export default function Pedido () {
                   <span className="dica">{l.item.unidade?.toLowerCase()}</span>
                   {ehFarmaceutico && l.preco > 0 && (
                     <span className="dica num" style={{ marginLeft: 'auto' }}>
-                      {formatarMoeda(l.preco)} · {formatarMoeda(quantidadeFinal(l) * l.preco)}
+                      {ocultar(
+                        `${formatarMoeda(l.preco)} · ${formatarMoeda(quantidadeFinal(l) * l.preco)}`,
+                        valores.visivel
+                      )}
                     </span>
                   )}
                 </div>
