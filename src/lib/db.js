@@ -635,3 +635,167 @@ export async function excluirProfissional (profissional, ctx) {
   await deleteDoc(doc(db, 'profissionais', profissional.id))
   await registrarLog(ctx, 'profissional-excluido', profissional.nome, 'profissionais', profissional.id)
 }
+
+/* =========================================================
+   Importação de catálogo por planilha
+   ========================================================= */
+
+const SEM_ACENTO = t => String(t || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/\s+/g, ' ').trim()
+
+/** Nomes de coluna aceitos, para a planilha não precisar de formato exato. */
+const COLUNAS = {
+  codigo: ['codigo', 'cod', 'codigo do item'],
+  descricao: ['descricao', 'descricao do catalogo', 'item do catalogo', 'nome'],
+  precoContrato: ['preco de contrato', 'preco contrato', 'precocontrato', 'preco unitario', 'preco'],
+  marca: ['marca', 'marca / fabricante', 'fabricante'],
+  fornecedor: ['fornecedor'],
+  contrato: ['contrato'],
+  codigoContrato: ['item no contrato', 'item do contrato', 'codigo contrato'],
+  estoqueMinimo: ['estoque minimo', 'minimo'],
+  unidade: ['unidade', 'unidade de contagem'],
+  tipo: ['tipo'],
+  principioAtivo: ['principio ativo', 'principio ativo (dcb)', 'dcb'],
+  concentracao: ['concentracao'],
+  formaFarmaceutica: ['forma', 'forma farmaceutica'],
+  grupoFarmacologico: ['grupo farmacologico'],
+  grupoATC: ['grupo atc'],
+  controlado: ['controle', 'controlado', 'controle especial']
+}
+
+const NUMERICOS = ['precoContrato', 'estoqueMinimo']
+
+/** Lê texto CSV com separador ; ou , respeitando aspas. */
+export function lerCSV (texto) {
+  const limpo = texto.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
+  const separador = (limpo.split('\n')[0].match(/;/g) || []).length >=
+                    (limpo.split('\n')[0].match(/,/g) || []).length ? ';' : ','
+  const linhas = []
+  let campo = ''
+  let linha = []
+  let dentroDeAspas = false
+
+  for (let i = 0; i < limpo.length; i++) {
+    const c = limpo[i]
+    if (dentroDeAspas) {
+      if (c === '"') {
+        if (limpo[i + 1] === '"') { campo += '"'; i++ } else dentroDeAspas = false
+      } else campo += c
+      continue
+    }
+    if (c === '"') { dentroDeAspas = true; continue }
+    if (c === separador) { linha.push(campo); campo = ''; continue }
+    if (c === '\n') { linha.push(campo); linhas.push(linha); linha = []; campo = ''; continue }
+    campo += c
+  }
+  linha.push(campo)
+  if (linha.some(v => v.trim())) linhas.push(linha)
+  return linhas
+}
+
+/** Converte a planilha em alterações prontas, sem gravar nada ainda. */
+export function prepararImportacao (linhas, itens) {
+  if (!linhas.length) throw new Error('A planilha está vazia.')
+
+  const cabecalho = linhas[0].map(SEM_ACENTO)
+  const mapa = {}
+  Object.entries(COLUNAS).forEach(([campo, nomes]) => {
+    const pos = cabecalho.findIndex(h => nomes.includes(h))
+    if (pos >= 0) mapa[campo] = pos
+  })
+
+  if (mapa.codigo === undefined) {
+    throw new Error('A planilha precisa de uma coluna "Código" para identificar o item.')
+  }
+
+  const porCodigo = {}
+  itens.forEach(i => { porCodigo[SEM_ACENTO(i.codigo)] = i })
+
+  const atualizacoes = []
+  const novos = []
+  const ignoradas = []
+
+  for (let n = 1; n < linhas.length; n++) {
+    const linha = linhas[n]
+    const codigo = String(linha[mapa.codigo] || '').trim()
+    if (!codigo) continue
+
+    const valores = {}
+    Object.entries(mapa).forEach(([campo, pos]) => {
+      if (campo === 'codigo') return
+      let v = String(linha[pos] ?? '').trim()
+      if (v === '') return
+      if (NUMERICOS.includes(campo)) {
+        const numero = Number(v.replace(/\./g, '').replace(',', '.'))
+        if (!Number.isFinite(numero)) return
+        v = numero
+      }
+      valores[campo] = v
+    })
+
+    const existente = porCodigo[SEM_ACENTO(codigo)]
+
+    if (!existente) {
+      if (valores.descricao) novos.push({ linha: n + 1, codigo, valores })
+      else ignoradas.push({ linha: n + 1, codigo, motivo: 'código não existe e não há descrição para criar' })
+      continue
+    }
+
+    // Só entra na lista o que realmente muda.
+    const mudancas = {}
+    Object.entries(valores).forEach(([campo, v]) => {
+      const atual = existente[campo]
+      const igual = NUMERICOS.includes(campo)
+        ? Number(atual || 0) === Number(v)
+        : String(atual || '') === String(v)
+      if (!igual) mudancas[campo] = v
+    })
+
+    if (Object.keys(mudancas).length) {
+      atualizacoes.push({ linha: n + 1, item: existente, mudancas })
+    } else {
+      ignoradas.push({ linha: n + 1, codigo, motivo: 'nada a alterar' })
+    }
+  }
+
+  return { atualizacoes, novos, ignoradas, colunas: Object.keys(mapa) }
+}
+
+/** Grava as alterações preparadas. */
+export async function aplicarImportacao ({ atualizacoes, novos }, ctx, { criarNovos = false } = {}) {
+  let lote = writeBatch(db)
+  let n = 0
+  const comitar = async () => { if (n) { await lote.commit(); lote = writeBatch(db); n = 0 } }
+
+  for (const a of atualizacoes) {
+    lote.set(doc(db, 'itens', a.item.id), { ...a.mudancas, atualizadoEm: serverTimestamp() }, { merge: true })
+    if (++n >= 400) await comitar()
+  }
+
+  let criados = 0
+  if (criarNovos) {
+    for (const item of novos) {
+      lote.set(doc(collection(db, 'itens')), {
+        codigo: item.codigo,
+        tipo: 'MEDICAMENTO',
+        unidade: 'UNIDADE',
+        estoqueMinimo: 0,
+        controlaLote: true,
+        ativo: true,
+        ...item.valores,
+        criadoEm: serverTimestamp(),
+        criadoPor: ctx.nome
+      })
+      criados++
+      if (++n >= 400) await comitar()
+    }
+  }
+  await comitar()
+
+  await registrarLog(
+    ctx, 'importacao-catalogo',
+    `${atualizacoes.length} item(ns) atualizados e ${criados} criado(s) por planilha`
+  )
+  return { atualizados: atualizacoes.length, criados }
+}

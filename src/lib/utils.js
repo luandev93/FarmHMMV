@@ -107,7 +107,7 @@ export const NOMES_FUNCAO = {
   auxiliar: 'Auxiliar'
 }
 
-export const VERSAO = '1.2'
+export const VERSAO = '1.3'
 
 /**
  * Preço usado para valorar estoque e pedido: apenas o preço de contrato,

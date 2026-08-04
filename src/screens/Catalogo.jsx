@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Confirmar, Icone, Painel, Vazio, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
-import { salvarItem, excluirItem, semear } from '../lib/db'
+import { salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao } from '../lib/db'
 import {
   CLASSES_CONTROLE, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
   baixarCSV, formatarNumero, semAcento
@@ -28,6 +28,10 @@ export default function Catalogo () {
   const [editando, setEditando] = useState(null)
   const [excluindo, setExcluindo] = useState(null)
   const [carregandoPadrao, setCarregandoPadrao] = useState(false)
+  const [previa, setPrevia] = useState(null)
+  const [criarNovos, setCriarNovos] = useState(false)
+  const [aplicando, setAplicando] = useState(false)
+  const arquivo = useRef(null)
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
 
@@ -91,14 +95,36 @@ export default function Catalogo () {
       </div>
 
       {ehFarmaceutico && (
-        <div className="acoes bloco">
-          <button className="btn" onClick={() => setEditando({ ...VAZIO })}>
-            <Icone nome="entrada" tamanho={18} /> Novo item
+        <>
+          <div className="acoes bloco">
+            <button className="btn" onClick={() => setEditando({ ...VAZIO })}>
+              <Icone nome="entrada" tamanho={18} /> Novo item
+            </button>
+            <button className="btn secundario" onClick={exportar}>
+              <Icone nome="baixar" tamanho={18} /> Exportar
+            </button>
+          </div>
+
+          <input
+            ref={arquivo} type="file" accept=".csv,text/csv" style={{ display: 'none' }}
+            onChange={async e => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (!f) return
+              try {
+                const texto = await f.text()
+                const resultado = prepararImportacao(lerCSV(texto), dados.itens)
+                setCriarNovos(false)
+                setPrevia({ ...resultado, nomeArquivo: f.name })
+              } catch (err) {
+                avisar(err.message, 'erro')
+              }
+            }}
+          />
+          <button className="btn secundario bloco-largo bloco" onClick={() => arquivo.current?.click()}>
+            <Icone nome="etiqueta" tamanho={18} /> Importar planilha de preços
           </button>
-          <button className="btn secundario" onClick={exportar}>
-            <Icone nome="baixar" tamanho={18} /> CSV
-          </button>
-        </div>
+        </>
       )}
 
       {dados.itens.length === 0 && (
@@ -146,6 +172,98 @@ export default function Catalogo () {
         <p className="dica" style={{ marginTop: 10 }}>
           Mostrando os 300 primeiros. Refine a busca para encontrar o restante.
         </p>
+      )}
+
+      {previa && (
+        <Painel
+          titulo="Conferir antes de aplicar"
+          descricao={previa.nomeArquivo}
+          aoFechar={() => setPrevia(null)}
+          rodape={
+            <>
+              <button className="btn secundario" onClick={() => setPrevia(null)}>Cancelar</button>
+              <button
+                className="btn"
+                disabled={aplicando || (!previa.atualizacoes.length && !(criarNovos && previa.novos.length))}
+                onClick={async () => {
+                  setAplicando(true)
+                  try {
+                    const r = await aplicarImportacao(previa, ctx, { criarNovos })
+                    setPrevia(null)
+                    avisar(`${r.atualizados} atualizado(s), ${r.criados} criado(s).`, 'ok')
+                  } catch (err) {
+                    avisar('Falhou: ' + err.message, 'erro')
+                  } finally {
+                    setAplicando(false)
+                  }
+                }}
+              >{aplicando ? 'Gravando…' : 'Aplicar'}</button>
+            </>
+          }
+        >
+          <div className="indicadores" style={{ marginTop: 14 }}>
+            <div className="indicador">
+              <div className="n num">{previa.atualizacoes.length}</div>
+              <div className="r">itens a atualizar</div>
+            </div>
+            <div className="indicador atencao">
+              <div className="n num">{previa.novos.length}</div>
+              <div className="r">códigos novos</div>
+            </div>
+          </div>
+
+          {previa.novos.length > 0 && (
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5, marginTop: 14 }}>
+              <input
+                type="checkbox" checked={criarNovos} onChange={e => setCriarNovos(e.target.checked)}
+                style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+              />
+              <span>
+                Criar os {previa.novos.length} códigos que ainda não existem
+                <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                  Deixe desmarcado para só atualizar o que já está cadastrado.
+                </small>
+              </span>
+            </label>
+          )}
+
+          {previa.ignoradas.length > 0 && (
+            <p className="dica" style={{ marginTop: 12 }}>
+              {previa.ignoradas.length} linha(s) sem alteração ou sem código correspondente.
+            </p>
+          )}
+
+          <h3 style={{ fontSize: 14, marginTop: 18, marginBottom: 8 }}>O que vai mudar</h3>
+          {previa.atualizacoes.length === 0 ? (
+            <p className="dica">Nenhuma alteração nos itens já cadastrados.</p>
+          ) : (
+            <table className="tabela">
+              <thead><tr><th>Item</th><th>Alterações</th></tr></thead>
+              <tbody>
+                {previa.atualizacoes.slice(0, 60).map(a => (
+                  <tr key={a.item.id}>
+                    <td>
+                      <b>{a.item.codigo}</b><br />
+                      <span className="dica">{a.item.descricao}</span>
+                    </td>
+                    <td>
+                      {Object.entries(a.mudancas).map(([campo, v]) => (
+                        <div key={campo} style={{ fontSize: 12.5 }}>
+                          {campo}: <b>{String(v)}</b>
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {previa.atualizacoes.length > 60 && (
+            <p className="dica" style={{ marginTop: 8 }}>
+              Mostrando as 60 primeiras de {previa.atualizacoes.length}.
+            </p>
+          )}
+        </Painel>
       )}
 
       {editando && (

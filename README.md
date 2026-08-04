@@ -1,4 +1,4 @@
-# Controle de estoque · Farmácia — v1.2
+# Controle de estoque · Farmácia — v1.3
 
 Sistema de estoque para farmácia hospitalar, feito para funcionar bem no celular
 e também no computador. React + Vite, com Firebase (Authentication + Firestore)
@@ -42,6 +42,11 @@ e publicação no Firebase Hosting.
   configurações). Restrito a farmacêutico e administrador.
 - **Pessoas** — cadastro com função, data de nascimento e lembrete de aniversário,
   troca e recuperação de senha.
+- **Importação por planilha** — no Catálogo, o botão *Importar planilha de preços* lê
+  um CSV, mostra exatamente o que vai mudar em cada item e só grava depois da sua
+  confirmação. Basta uma coluna **Código**; as demais colunas presentes são aplicadas
+  (preço de contrato, marca, contrato, estoque mínimo, unidade, tipo e outras).
+  Códigos que não existem podem ser criados, se você marcar a opção.
 - **Catálogo** com 239 itens já classificados (grupo ATC, grupo farmacológico,
   apresentação, unidade, posologia, preço de referência, classe de controle,
   refrigerado e alta vigilância). Todos os saldos começam em zero.
