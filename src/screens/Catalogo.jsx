@@ -58,14 +58,15 @@ export default function Catalogo () {
     const l = [[
       'Código', 'Descrição', 'Tipo', 'Princípio ativo', 'Concentração', 'Forma', 'Unidade',
       'Grupo ATC', 'Grupo farmacológico', 'Controle', 'Termolábil', 'Alta vigilância',
-      'Estoque mínimo', 'Preço mín.', 'Preço máx.', 'Preço contrato', 'Marca', 'Contrato', 'Ativo'
+      'Estoque mínimo', 'Preço de contrato', 'PMVG mín. (referência)', 'PMVG máx. (referência)',
+      'Marca', 'Contrato', 'Ativo'
     ]]
     lista.forEach(i => l.push([
       i.codigo, i.descricao, i.tipo, i.principioAtivo, i.concentracao, i.formaFarmaceutica,
       i.unidade, i.grupoATC, i.grupoFarmacologico, i.controlado,
       i.termolabil ? 'sim' : '', i.altaVigilancia ? 'sim' : '',
       i.estoqueMinimo || 0,
-      i.precoMin ?? '', i.precoMax ?? '', i.precoContrato ?? '',
+      i.precoContrato ?? '', i.precoMin ?? '', i.precoMax ?? '',
       i.marca, i.contrato, i.ativo === false ? 'não' : 'sim'
     ]))
     baixarCSV('catalogo.csv', l)
@@ -327,6 +328,10 @@ function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, somenteLeitura }
             </div>
           </div>
 
+          <p className="dica">
+            Só o preço de contrato entra nos totais do sistema. Os campos de PMVG
+            abaixo ficam guardados apenas como referência de mercado.
+          </p>
           <div className="linha-campos">
             <div>
               <label className="rotulo">PMVG mínimo (R$)</label>

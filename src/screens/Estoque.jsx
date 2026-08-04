@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { Icone, Painel, Vazio } from '../components/ui'
 import { useDados } from '../lib/store'
 import { movimentosRecentes } from '../lib/db'
+import { useAuth } from '../lib/auth'
 import {
-  baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero, semAcento
+  baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero, precoDe, semAcento
 } from '../lib/utils'
 
 const FILTROS = [
@@ -17,6 +18,7 @@ const FILTROS = [
 
 export default function Estoque () {
   const dados = useDados()
+  const { ehFarmaceutico } = useAuth()
   const [estoqueId, setEstoqueId] = useState('')  // vazio = todos
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('comSaldo')
@@ -54,28 +56,40 @@ export default function Estoque () {
       .sort((a, b) => saldoDoContexto(b) - saldoDoContexto(a) || a.descricao.localeCompare(b.descricao))
   }, [dados, busca, filtro, estoqueId])
 
+  // O valor só é calculado para quem pode vê-lo.
   const valorTotal = useMemo(
-    () => lista.reduce((s, i) => {
-      const preco = i.precoContrato ?? i.precoMax ?? i.precoMin ?? 0
-      return s + saldoDoContexto(i) * preco
-    }, 0),
-    [lista, estoqueId, dados.saldos]
+    () => (ehFarmaceutico
+      ? lista.reduce((s, i) => s + saldoDoContexto(i) * (precoDe(i) || 0), 0)
+      : 0),
+    [lista, estoqueId, dados.saldos, ehFarmaceutico]
   )
 
+  const semPreco = ehFarmaceutico && lista.filter(i => saldoDoContexto(i) > 0 && !precoDe(i)).length
+
   function exportar () {
-    const linhas = [[
+    const comValor = ehFarmaceutico
+    const cabecalho = [
       'Código', 'Descrição', 'Tipo', 'Grupo ATC', 'Grupo farmacológico', 'Controle',
-      'Unidade', 'Saldo', 'Estoque mínimo', 'Preço ref.', 'Valor em estoque', 'Local'
-    ]]
+      'Unidade', 'Saldo', 'Estoque mínimo', 'Local'
+    ]
+    if (comValor) cabecalho.push('Preço de contrato', 'Valor em estoque')
+    const linhas = [cabecalho]
+
     lista.forEach(i => {
-      const preco = i.precoContrato ?? i.precoMax ?? i.precoMin ?? 0
       const saldo = saldoDoContexto(i)
-      linhas.push([
+      const local = estoqueId ? dados.estoques.find(e => e.id === estoqueId)?.nome : 'Todos os locais'
+      const linha = [
         i.codigo, i.descricao, i.tipo, i.grupoATC, i.grupoFarmacologico, i.controlado,
-        i.unidade, saldo, i.estoqueMinimo || 0,
-        String(preco).replace('.', ','), String((saldo * preco).toFixed(2)).replace('.', ','),
-        estoqueId ? dados.estoques.find(e => e.id === estoqueId)?.nome : 'Todos os locais'
-      ])
+        i.unidade, saldo, i.estoqueMinimo || 0, local
+      ]
+      if (comValor) {
+        const preco = precoDe(i)
+        linha.push(
+          preco === null ? '' : String(preco).replace('.', ','),
+          preco === null ? '' : String((saldo * preco).toFixed(2)).replace('.', ',')
+        )
+      }
+      linhas.push(linha)
     })
     baixarCSV(`estoque-${new Date().toISOString().slice(0, 10)}.csv`, linhas)
   }
@@ -105,15 +119,20 @@ export default function Estoque () {
         ))}
       </div>
 
-      <div className="indicadores bloco">
+      <div className="indicadores bloco" style={ehFarmaceutico ? undefined : { gridTemplateColumns: '1fr' }}>
         <div className="indicador">
           <div className="n num">{lista.length}</div>
           <div className="r">itens nesta visão</div>
         </div>
-        <div className="indicador">
-          <div className="n num" style={{ fontSize: 19 }}>{formatarMoeda(valorTotal)}</div>
-          <div className="r">valor estimado</div>
-        </div>
+        {ehFarmaceutico && (
+          <div className="indicador">
+            <div className="n num" style={{ fontSize: 19 }}>{formatarMoeda(valorTotal)}</div>
+            <div className="r">
+              valor de contrato
+              {semPreco ? ` · ${semPreco} sem preço` : ''}
+            </div>
+          </div>
+        )}
       </div>
 
       {lista.length === 0 ? (
@@ -161,13 +180,17 @@ export default function Estoque () {
       </button>
 
       {detalhe && (
-        <DetalheItem item={detalhe} estoqueId={estoqueId} aoFechar={() => setDetalhe(null)} />
+        <DetalheItem
+          item={detalhe} estoqueId={estoqueId}
+          mostrarPreco={ehFarmaceutico}
+          aoFechar={() => setDetalhe(null)}
+        />
       )}
     </>
   )
 }
 
-function DetalheItem ({ item, estoqueId, aoFechar }) {
+function DetalheItem ({ item, estoqueId, mostrarPreco, aoFechar }) {
   const dados = useDados()
   const [historico, setHistorico] = useState(null)
 
@@ -201,11 +224,13 @@ function DetalheItem ({ item, estoqueId, aoFechar }) {
         <Linha titulo="Posologia de referência" valor={item.posologia} />
         <Linha titulo="Indicação" valor={item.indicacao} />
         <Linha titulo="Efeitos adversos comuns" valor={item.efeitosAdversos} />
-        <Linha titulo="Preço de referência" valor={
-          item.precoContrato != null
-            ? `${formatarMoeda(item.precoContrato)} (contrato ${item.contrato || '—'})`
-            : (item.precoMin != null ? `${formatarMoeda(item.precoMin)} a ${formatarMoeda(item.precoMax)} (PMVG)` : null)
-        } />
+        {mostrarPreco && (
+          <Linha titulo="Preço de contrato" valor={
+            precoDe(item) === null
+              ? null
+              : `${formatarMoeda(precoDe(item))} · contrato ${item.contrato || 'não informado'}`
+          } />
+        )}
         <Linha titulo="Estoque mínimo" valor={item.estoqueMinimo ? `${item.estoqueMinimo} ${item.unidade?.toLowerCase()}` : 'não definido'} />
       </dl>
 

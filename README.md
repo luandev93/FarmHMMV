@@ -1,4 +1,4 @@
-# Controle de estoque · Farmácia — v1.1
+# Controle de estoque · Farmácia — v1.2
 
 Sistema de estoque para farmácia hospitalar, feito para funcionar bem no celular
 e também no computador. React + Vite, com Firebase (Authentication + Firestore)
@@ -26,6 +26,10 @@ e publicação no Firebase Hosting.
   Um almoxarifado pode ficar só com receber, repassar e descartar, sem dispensar.
 - **Inventário** — contagem que **substitui** o saldo, e não soma nem subtrai.
   Restrito a farmacêutico e administrador.
+- **Preços** — o sistema valoriza estoque e pedido **apenas pelo preço de contrato**,
+  que é o que a unidade paga. O PMVG fica guardado no catálogo só como referência de
+  mercado e não entra em nenhum total. Valores aparecem somente para farmacêutico e
+  administrador, e não saem no arquivo do pedido.
 - **Pedido** — sugestão de reposição combinando estoque mínimo e consumo médio:
   `necessidade = maior valor entre (estoque mínimo) e (consumo diário × dias × margem)`,
   descontando o saldo atual. Exporta CSV e copia a lista pronta.
@@ -46,6 +50,7 @@ e publicação no Firebase Hosting.
 |---|---|---|---|
 | Movimentar e consultar | sim | sim | sim |
 | Sugestão de pedido | sim | sim | sim |
+| Ver preços e valor do estoque | não | sim | sim |
 | Inventário | não | sim | sim |
 | Catálogo de itens | leitura | edição | edição |
 | Histórico de movimentações | sim | sim | sim |

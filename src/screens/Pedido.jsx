@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icone, Vazio, useAviso } from '../components/ui'
 import { useDados } from '../lib/store'
 import { consumoPorItem } from '../lib/db'
-import { baixarCSV, formatarMoeda, formatarNumero } from '../lib/utils'
+import { useAuth } from '../lib/auth'
+import { baixarCSV, formatarMoeda, formatarNumero, precoDe } from '../lib/utils'
 
 /**
  * Sugestão de compra combinando as duas referências:
@@ -14,6 +15,7 @@ import { baixarCSV, formatarMoeda, formatarNumero } from '../lib/utils'
 export default function Pedido () {
   const dados = useDados()
   const avisar = useAviso()
+  const { ehFarmaceutico } = useAuth()
 
   const [dias, setDias] = useState(dados.config.diasCobertura || 30)
   const [historico, setHistorico] = useState(dados.config.diasHistoricoConsumo || 90)
@@ -52,7 +54,7 @@ export default function Pedido () {
         const minimo = Number(i.estoqueMinimo) || 0
         const necessidade = Math.max(minimo, porConsumo)
         const sugerido = Math.max(0, Math.ceil(necessidade - saldo))
-        const preco = i.precoContrato ?? i.precoMax ?? i.precoMin ?? 0
+        const preco = precoDe(i) || 0
         const cobertura = diario > 0 ? saldo / diario : null
         return { item: i, saldo, diario, minimo, necessidade, sugerido, preco, cobertura }
       })
@@ -84,9 +86,7 @@ export default function Pedido () {
         l.item.grupoATC, l.item.grupoFarmacologico,
         l.saldo, l.diario.toFixed(2).replace('.', ','),
         l.cobertura === null ? '' : l.cobertura.toFixed(1).replace('.', ','),
-        l.minimo, q,
-        String(l.preco).replace('.', ','),
-        (q * l.preco).toFixed(2).replace('.', ',')
+        l.minimo, q
       ])
     })
     baixarCSV(`pedido-${new Date().toISOString().slice(0, 10)}.csv`, cab)
@@ -155,15 +155,17 @@ export default function Pedido () {
         />
       ) : (
         <>
-          <div className="indicadores bloco">
+          <div className="indicadores bloco" style={ehFarmaceutico ? undefined : { gridTemplateColumns: '1fr' }}>
             <div className="indicador">
               <div className="n num">{linhas.length}</div>
               <div className="r">itens a pedir</div>
             </div>
-            <div className="indicador">
-              <div className="n num" style={{ fontSize: 19 }}>{formatarMoeda(totalEstimado)}</div>
-              <div className="r">custo estimado</div>
-            </div>
+            {ehFarmaceutico && (
+              <div className="indicador">
+                <div className="n num" style={{ fontSize: 19 }}>{formatarMoeda(totalEstimado)}</div>
+                <div className="r">custo de contrato · só na tela</div>
+              </div>
+            )}
           </div>
 
           <div className="lista">
@@ -192,9 +194,11 @@ export default function Pedido () {
                     onChange={e => setAjustes(a => ({ ...a, [l.item.id]: e.target.value.replace(/\D/g, '') }))}
                   />
                   <span className="dica">{l.item.unidade?.toLowerCase()}</span>
-                  <span className="dica num" style={{ marginLeft: 'auto' }}>
-                    {formatarMoeda(quantidadeFinal(l) * l.preco)}
-                  </span>
+                  {ehFarmaceutico && l.preco > 0 && (
+                    <span className="dica num" style={{ marginLeft: 'auto' }}>
+                      {formatarMoeda(l.preco)} · {formatarMoeda(quantidadeFinal(l) * l.preco)}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

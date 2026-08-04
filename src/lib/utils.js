@@ -107,7 +107,17 @@ export const NOMES_FUNCAO = {
   auxiliar: 'Auxiliar'
 }
 
-export const VERSAO = '1.1'
+export const VERSAO = '1.2'
+
+/**
+ * Preço usado para valorar estoque e pedido: apenas o preço de contrato,
+ * que é o que a unidade efetivamente paga. O PMVG é teto de venda ao governo
+ * e não representa custo, por isso nunca entra em nenhum total.
+ */
+export function precoDe (item) {
+  const v = Number(item?.precoContrato)
+  return Number.isFinite(v) && v > 0 ? v : null
+}
 
 export const TIPOS_MOVIMENTO = {
   entrada: { nome: 'Entrada', sinal: '+' },
