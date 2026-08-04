@@ -231,8 +231,11 @@ select.campo {
 
 .acao-grupo {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+@media (min-width: 620px) {
+  .acao-grupo { grid-template-columns: repeat(4, 1fr); }
 }
 .acao-btn {
   border: 1.5px solid var(--borda);
@@ -252,6 +255,8 @@ select.campo {
 .acao-btn[aria-pressed="true"] { color: var(--branco); border-color: transparent; }
 .acao-btn[aria-pressed="true"].entrada { background: var(--entrada); }
 .acao-btn[aria-pressed="true"].saida { background: var(--saida); }
+.acao-btn[aria-pressed="true"].consumo { background: var(--azul-600); }
+.acao-btn[aria-pressed="true"].descarte { background: var(--saida); }
 .acao-btn[aria-pressed="true"].transferencia { background: var(--transf); }
 .acao-btn[aria-pressed="true"].inventario { background: var(--inventario); }
 
@@ -337,6 +342,8 @@ select.campo {
 }
 .lanc.entrada { border-left-color: var(--entrada); }
 .lanc.saida { border-left-color: var(--saida); }
+.lanc.consumo { border-left-color: var(--azul-600); }
+.lanc.descarte { border-left-color: var(--saida); }
 .lanc.transferencia { border-left-color: var(--transf); }
 .lanc.inventario { border-left-color: var(--inventario); }
 .lanc .corpo { min-width: 0; flex: 1; }
@@ -349,6 +356,8 @@ select.campo {
 .lanc .qtd { font-size: 17px; font-weight: 700; white-space: nowrap; }
 .lanc .qtd.entrada { color: var(--entrada); }
 .lanc .qtd.saida { color: var(--saida); }
+.lanc .qtd.consumo { color: var(--azul-600); }
+.lanc .qtd.descarte { color: var(--saida); }
 .lanc .qtd.transferencia { color: var(--transf); }
 .lanc .qtd.inventario { color: var(--inventario); }
 .lanc .btns { display: flex; flex-direction: column; gap: 4px; }

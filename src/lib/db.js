@@ -173,9 +173,17 @@ async function lotesDisponiveis (estoqueId) {
 }
 
 /** Distribui a quantidade entre os lotes disponíveis, do que vence primeiro para o último. */
-export function alocarPVPS (lotes, itemId, quantidade) {
+export function alocarPVPS (lotes, itemId, quantidade, loteEscolhido = null) {
   const candidatos = lotes
-    .filter(l => l.itemId === itemId && l.qtd > 0)
+    .filter(l => {
+      if (l.itemId !== itemId || l.qtd <= 0) return false
+      // No descarte de um lote específico, só aquele lote é consumido.
+      if (loteEscolhido) {
+        return (l.lote || '') === (loteEscolhido.lote || '') &&
+               (l.validade || null) === (loteEscolhido.validade || null)
+      }
+      return true
+    })
     .sort(ordemFEFO)
 
   const alocacoes = []
@@ -228,6 +236,14 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
       qtd,
       motivo: linha.motivo || '',
       observacao: linha.observacao || '',
+      finalidade: linha.finalidade || '',
+      pacienteNome: linha.pacienteNome || '',
+      pacienteCPF: linha.pacienteCPF || '',
+      prescritorNome: linha.prescritorNome || '',
+      prescritorConselho: linha.prescritorConselho || '',
+      responsavelNome: linha.responsavelNome || '',
+      responsavelConselho: linha.responsavelConselho || '',
+      destinoInterno: linha.destinoInterno || '',
       usuarioUid: ctx.uid,
       usuarioNome: ctx.nome,
       usuarioFuncao: ctx.funcao,
@@ -270,13 +286,17 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
 
     /* ---------- SAÍDA e TRANSFERÊNCIA (consomem por PVPS) ---------- */
     const origem = porLocal[linha.estoqueId] || []
-    const { alocacoes, restante } = alocarPVPS(origem, linha.itemId, qtd)
+    const { alocacoes, restante } = alocarPVPS(
+      origem, linha.itemId, qtd,
+      linha.loteEscolhido || null
+    )
 
     if (restante > 0 && !opcoes.permitirNegativo) {
       const disponivel = qtd - restante
       throw new Error(
-        `Saldo insuficiente de "${linha.itemDescricao}" em ${linha.estoqueNome}: ` +
-        `há ${disponivel} e o lançamento pede ${qtd}.`
+        `Saldo insuficiente de "${linha.itemDescricao}" em ${linha.estoqueNome}` +
+        (linha.loteEscolhido ? ` no lote ${linha.loteEscolhido.lote || 'sem lote'}` : '') +
+        `: há ${disponivel} e o lançamento pede ${qtd}.`
       )
     }
 
@@ -353,7 +373,7 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
         ref: collection(db, 'movimentos'),
         dados: {
           ...comum,
-          tipo: 'saida',
+          tipo: linha.tipo,
           estoqueId: linha.estoqueId,
           estoqueNome: linha.estoqueNome,
           lotesUsados: detalheLotes
@@ -545,11 +565,12 @@ export async function movimentosRecentes (filtros = {}) {
 }
 
 /** Consumo diário médio por item, a partir das saídas do período. */
-export async function consumoPorItem (dias) {
+export async function consumoPorItem (dias, { incluirDescarte = false } = {}) {
   const desde = new Date(Date.now() - dias * 86400000)
+  const tipos = incluirDescarte ? ['consumo', 'saida', 'descarte'] : ['consumo', 'saida']
   const snap = await getDocs(query(
     collection(db, 'movimentos'),
-    where('tipo', '==', 'saida'),
+    where('tipo', 'in', tipos),
     where('criadoEm', '>=', Timestamp.fromDate(desde)),
     orderBy('criadoEm', 'desc'),
     limit(4000)
@@ -587,4 +608,30 @@ export async function excluirPerfilUsuario (usuario, ctx) {
     'usuarios',
     usuario.id
   )
+}
+
+/* =========================================================
+   Profissionais — lista de referência para o preenchimento
+   ========================================================= */
+
+export async function salvarProfissional (dados, ctx, id = null) {
+  const corpo = {
+    ...dados,
+    nome: String(dados.nome || '').trim(),
+    numero: String(dados.numero || '').trim(),
+    atualizadoEm: serverTimestamp()
+  }
+  if (id) {
+    await updateDoc(doc(db, 'profissionais', id), corpo)
+    await registrarLog(ctx, 'profissional-editado', corpo.nome, 'profissionais', id)
+    return id
+  }
+  const ref = await addDoc(collection(db, 'profissionais'), { ...corpo, criadoEm: serverTimestamp() })
+  await registrarLog(ctx, 'profissional-criado', corpo.nome, 'profissionais', ref.id)
+  return ref.id
+}
+
+export async function excluirProfissional (profissional, ctx) {
+  await deleteDoc(doc(db, 'profissionais', profissional.id))
+  await registrarLog(ctx, 'profissional-excluido', profissional.nome, 'profissionais', profissional.id)
 }

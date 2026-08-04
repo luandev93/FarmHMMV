@@ -19,16 +19,11 @@ service cloud.firestore {
     }
     function ehAdm() { return funcao() == 'adm'; }
     function ehFarmaceutico() { return funcao() == 'adm' || funcao() == 'farmaceutico'; }
-    function semAdmAinda() {
-      return !exists(/databases/$(database)/documents/config/app);
-    }
 
     // Perfis de usuário
     match /usuarios/{uid} {
-      // O primeiro usuário do sistema se cadastra como adm (bootstrap).
-      allow create: if logado()
-                    && request.auth.uid == uid
-                    && (semAdmAinda() || ehAdm());
+      // Não existe autocadastro: só o administrador libera acesso a alguém.
+      allow create: if ehAdm();
       allow read:   if ativo() || (logado() && request.auth.uid == uid);
       allow update: if ehAdm()
                     || (logado() && request.auth.uid == uid
@@ -40,7 +35,7 @@ service cloud.firestore {
     // Configuração geral
     match /config/{doc} {
       allow read:   if logado();
-      allow create: if logado() && (semAdmAinda() || ehAdm());
+      allow create: if ehAdm();
       allow update, delete: if ehAdm();
     }
 
@@ -72,6 +67,12 @@ service cloud.firestore {
       allow create: if ativo();
       allow update: if false;
       allow delete: if ehAdm();
+    }
+
+    // Profissionais: lista de referência para prescritor e responsável
+    match /profissionais/{id} {
+      allow read: if ativo();
+      allow write: if ehFarmaceutico();
     }
 
     // Auditoria: somente farmacêutico e adm leem

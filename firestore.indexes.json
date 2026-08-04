@@ -77,6 +77,34 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "lotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estoqueId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "qtd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "lotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "itemId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "qtd",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

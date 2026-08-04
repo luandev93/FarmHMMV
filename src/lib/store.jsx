@@ -3,7 +3,7 @@ import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from './auth'
 import { CONFIG_PADRAO } from './db'
-import { chaveSaldo, semAcento, diasAte } from './utils'
+import { chaveSaldo, semAcento, diasAte, ACOES_PADRAO } from './utils'
 
 const Contexto = createContext(null)
 
@@ -16,12 +16,13 @@ export function ProvedorDados ({ children }) {
   const [saldos, setSaldos] = useState({})
   const [lotes, setLotes] = useState([])
   const [usuarios, setUsuarios] = useState([])
+  const [profissionais, setProfissionais] = useState([])
   const [config, setConfig] = useState(CONFIG_PADRAO)
   const [prontos, setProntos] = useState({ itens: false, estoques: false, saldos: false })
 
   useEffect(() => {
     if (!ativo) {
-      setItens([]); setEstoques([]); setSaldos({}); setLotes([]); setUsuarios([])
+      setItens([]); setEstoques([]); setSaldos({}); setLotes([]); setUsuarios([]); setProfissionais([])
       setProntos({ itens: false, estoques: false, saldos: false })
       return
     }
@@ -50,6 +51,12 @@ export function ProvedorDados ({ children }) {
       onSnapshot(query(collection(db, 'lotes'), where('qtd', '>', 0)), s => {
         setLotes(s.docs.map(d => ({ id: d.id, ...d.data() })))
       }),
+      onSnapshot(collection(db, 'profissionais'), s => {
+        setProfissionais(
+          s.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+        )
+      }, () => setProfissionais([])),
       onSnapshot(collection(db, 'usuarios'), s => {
         setUsuarios(s.docs.map(d => ({ id: d.id, ...d.data() })))
       }, () => setUsuarios([])),
@@ -84,6 +91,21 @@ export function ProvedorDados ({ children }) {
 
     const itemPorId = id => itens.find(i => i.id === id)
 
+    // Ações que cada local aceita. Local sem regra definida aceita todas.
+    const acoesDe = estoqueId => {
+      const e = estoques.find(x => x.id === estoqueId)
+      const lista = Array.isArray(e?.acoes) && e.acoes.length ? e.acoes : ACOES_PADRAO
+      return lista
+    }
+
+    // Destinos de transferência. Lista vazia significa "qualquer local".
+    const destinosDe = estoqueId => {
+      const e = estoques.find(x => x.id === estoqueId)
+      const permitidos = Array.isArray(e?.destinos) ? e.destinos : []
+      const outros = estoques.filter(x => x.id !== estoqueId && x.ativo !== false)
+      return permitidos.length ? outros.filter(x => permitidos.includes(x.id)) : outros
+    }
+
     const abaixoDoMinimo = itensOrdenados.filter(i => {
       const min = Number(i.estoqueMinimo) || 0
       return min > 0 && saldoTotal(i.id) < min
@@ -103,16 +125,19 @@ export function ProvedorDados ({ children }) {
       saldos,
       lotes,
       usuarios,
+      profissionais,
       config,
       carregando: !(prontos.itens && prontos.estoques && prontos.saldos),
       saldoDe,
       saldoTotal,
       lotesDe,
       itemPorId,
+      acoesDe,
+      destinosDe,
       abaixoDoMinimo,
       vencendo
     }
-  }, [itens, estoques, saldos, lotes, usuarios, config, prontos])
+  }, [itens, estoques, saldos, lotes, usuarios, profissionais, config, prontos])
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
 }

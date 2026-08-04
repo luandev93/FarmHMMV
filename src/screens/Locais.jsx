@@ -3,7 +3,7 @@ import { Confirmar, Icone, Painel, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import { salvarEstoque, excluirEstoque } from '../lib/db'
-import { formatarNumero } from '../lib/utils'
+import { ACOES_ESTOQUE, ACOES_PADRAO, formatarNumero } from '../lib/utils'
 
 export default function Locais () {
   const { perfil, usuario, ehAdm } = useAuth()
@@ -20,13 +20,18 @@ export default function Locais () {
   return (
     <>
       <p className="dica bloco">
-        Cada local é um estoque próprio. As transferências acontecem entre eles.
+        Cada local é um estoque próprio. Aqui você define o que cada um aceita — um
+        almoxarifado, por exemplo, pode só receber, repassar e baixar vencidos, sem
+        dispensar a paciente.
       </p>
 
       {ehAdm && (
         <button
           className="btn bloco-largo bloco"
-          onClick={() => setEditando({ nome: '', descricao: '', ordem: dados.todosEstoques.length + 1, ativo: true })}
+          onClick={() => setEditando({
+            nome: '', descricao: '', ordem: dados.todosEstoques.length + 1,
+            ativo: true, acoes: [...ACOES_PADRAO], destinos: []
+          })}
         >
           <Icone nome="entrada" tamanho={18} /> Novo local
         </button>
@@ -44,6 +49,11 @@ export default function Locais () {
               <div className="meta">
                 {e.descricao && <span>{e.descricao}</span>}
                 {e.ativo === false && <span className="etq alerta">desativado</span>}
+                {Array.isArray(e.acoes) && e.acoes.length > 0 && e.acoes.length < 4 && (
+                  <span className="etq">
+                    {e.acoes.map(a => ACOES_ESTOQUE[a]).filter(Boolean).join(' · ')}
+                  </span>
+                )}
               </div>
             </div>
             <div className="valor">
@@ -91,7 +101,12 @@ export default function Locais () {
 }
 
 function FormularioLocal ({ local, aoSalvar, aoFechar, aoExcluir }) {
-  const [f, setF] = useState({ ...local })
+  const dados = useDados()
+  const [f, setF] = useState({
+    ...local,
+    acoes: Array.isArray(local.acoes) && local.acoes.length ? local.acoes : [...ACOES_PADRAO],
+    destinos: Array.isArray(local.destinos) ? local.destinos : []
+  })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const troca = (c, v) => setF(a => ({ ...a, [c]: v }))
@@ -107,6 +122,7 @@ function FormularioLocal ({ local, aoSalvar, aoFechar, aoExcluir }) {
             className="btn" disabled={salvando}
             onClick={async () => {
               if (!f.nome?.trim()) return setErro('Informe o nome do local.')
+              if (!f.acoes.length) return setErro('Marque pelo menos uma ação permitida.')
               setSalvando(true)
               try { await aoSalvar(f) } catch (e) { setErro(e.message) } finally { setSalvando(false) }
             }}
@@ -130,6 +146,56 @@ function FormularioLocal ({ local, aoSalvar, aoFechar, aoExcluir }) {
             onChange={e => troca('ordem', e.target.value.replace(/\D/g, ''))}
           />
         </div>
+        <div>
+          <label className="rotulo">O que este local aceita</label>
+          <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
+            {Object.entries(ACOES_ESTOQUE).map(([id, rotulo]) => (
+              <label key={id} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14.5 }}>
+                <input
+                  type="checkbox"
+                  checked={f.acoes.includes(id)}
+                  onChange={e => troca('acoes', e.target.checked
+                    ? [...f.acoes, id]
+                    : f.acoes.filter(x => x !== id))}
+                  style={{ width: 22, height: 22, accentColor: 'var(--azul-600)' }}
+                />
+                {rotulo}
+              </label>
+            ))}
+          </div>
+          {f.acoes.length === 0 && (
+            <p className="dica" style={{ color: 'var(--saida)', marginTop: 6 }}>
+              Marque pelo menos uma ação, senão ninguém consegue lançar nada aqui.
+            </p>
+          )}
+        </div>
+
+        {f.acoes.includes('transferencia') && (
+          <div>
+            <label className="rotulo">Pode transferir para</label>
+            <p className="dica" style={{ marginBottom: 8 }}>
+              Sem nenhum marcado, a transferência é liberada para qualquer local.
+            </p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {dados.todosEstoques
+                .filter(e => e.id !== local.id)
+                .map(e => (
+                  <label key={e.id} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14.5 }}>
+                    <input
+                      type="checkbox"
+                      checked={f.destinos.includes(e.id)}
+                      onChange={ev => troca('destinos', ev.target.checked
+                        ? [...f.destinos, e.id]
+                        : f.destinos.filter(x => x !== e.id))}
+                      style={{ width: 22, height: 22, accentColor: 'var(--azul-600)' }}
+                    />
+                    {e.nome}
+                  </label>
+                ))}
+            </div>
+          </div>
+        )}
+
         <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14.5 }}>
           <input
             type="checkbox" checked={f.ativo !== false} onChange={e => troca('ativo', e.target.checked)}

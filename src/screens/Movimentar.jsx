@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import BuscaItem from '../components/BuscaItem'
-import { Confirmar, Icone, Painel, Vazio, useAviso } from '../components/ui'
+import BuscaProfissional from '../components/BuscaProfissional'
+import { Confirmar, Icone, Vazio, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import { salvarLancamentos } from '../lib/db'
 import {
-  MOTIVOS_ENTRADA, MOTIVOS_SAIDA, dataBR, formatarNumero, idAleatorio, vibrar
+  ACOES_ESTOQUE, FINALIDADES_CONSUMO, MOTIVOS_ENTRADA, MOTIVOS_DESCARTE,
+  cpfValido, dataBR, formatarNumero, idAleatorio, mascaraCPF, vibrar
 } from '../lib/utils'
 
 const RASCUNHO = 'rascunho-movimentacao'
 
-const ACOES = [
-  { id: 'entrada', rotulo: 'Adicionar', icone: 'entrada' },
-  { id: 'saida', rotulo: 'Retirar', icone: 'saida' },
-  { id: 'transferencia', rotulo: 'Transferir', icone: 'transferencia' }
-]
+const ICONES = {
+  entrada: 'entrada',
+  consumo: 'saida',
+  transferencia: 'transferencia',
+  descarte: 'lixeira'
+}
 
 export default function Movimentar () {
   const { perfil, usuario } = useAuth()
@@ -31,6 +34,18 @@ export default function Movimentar () {
   const [motivo, setMotivo] = useState('')
   const [observacao, setObservacao] = useState('')
   const [detalhesAbertos, setDetalhes] = useState(false)
+
+  // Consumo
+  const [finalidade, setFinalidade] = useState('')
+  const [pacienteNome, setPacienteNome] = useState('')
+  const [pacienteCPF, setPacienteCPF] = useState('')
+  const [prescritor, setPrescritor] = useState(null)
+  const [responsavel, setResponsavel] = useState(null)
+  const [destinoInterno, setDestinoInterno] = useState('')
+
+  // Descarte
+  const [loteEscolhido, setLoteEscolhido] = useState(null)
+
   const [linhas, setLinhas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(RASCUNHO) || '[]') } catch { return [] }
   })
@@ -55,13 +70,31 @@ export default function Movimentar () {
 
   const estoque = dados.estoques.find(e => e.id === estoqueId)
   const destino = dados.estoques.find(e => e.id === destinoId)
-  const outrosEstoques = dados.estoques.filter(e => e.id !== estoqueId)
+  const acoesPermitidas = estoqueId ? dados.acoesDe(estoqueId) : []
+  const destinosPermitidos = estoqueId ? dados.destinosDe(estoqueId) : []
+
+  // Se o local não aceitar a ação escolhida, cai na primeira que ele aceita.
+  useEffect(() => {
+    if (acoesPermitidas.length && !acoesPermitidas.includes(acao)) {
+      setAcao(acoesPermitidas[0])
+      setErro('')
+    }
+  }, [estoqueId, acoesPermitidas, acao])
+
+  useEffect(() => {
+    if (destinoId && !destinosPermitidos.some(d => d.id === destinoId)) setDestinoId('')
+  }, [estoqueId, destinoId, destinosPermitidos])
 
   const saldoAtual = item && estoqueId ? dados.saldoDe(estoqueId, item.id) : 0
-  const lotesDoItem = item && estoqueId ? dados.lotesDe(estoqueId, item.id) : []
+  const lotesDoItem = useMemo(
+    () => (item && estoqueId ? dados.lotesDe(estoqueId, item.id) : [])
+      .slice()
+      .sort((a, b) => ((a.validade || '9999') < (b.validade || '9999') ? -1 : 1)),
+    [item, estoqueId, dados]
+  )
 
   const resumo = useMemo(() => {
-    const conta = { entrada: 0, saida: 0, transferencia: 0 }
+    const conta = {}
     linhas.forEach(l => { conta[l.tipo] = (conta[l.tipo] || 0) + 1 })
     return conta
   }, [linhas])
@@ -69,26 +102,38 @@ export default function Movimentar () {
   function limparFormulario () {
     setItem(null); setQtd(''); setLote(''); setValidade('')
     setObservacao(''); setEditandoId(null); setErro('')
+    setFinalidade(''); setPacienteNome(''); setPacienteCPF('')
+    setPrescritor(null); setResponsavel(null); setDestinoInterno('')
+    setLoteEscolhido(null); setMotivo('')
     setChaveBusca(k => k + 1)
   }
 
   function adicionar () {
     setErro('')
-    if (!estoqueId) return setErro('Escolha o estoque de origem.')
+    if (!estoqueId) return setErro('Escolha o estoque.')
     if (acao === 'transferencia' && !destinoId) return setErro('Escolha o estoque de destino.')
     if (acao === 'transferencia' && destinoId === estoqueId) return setErro('Origem e destino precisam ser diferentes.')
     if (!item) return setErro('Escolha o item.')
+    if (acao === 'consumo' && !finalidade) return setErro('Escolha se é dispensação a paciente ou consumo interno.')
+    if (acao === 'descarte' && !motivo) return setErro('Informe o motivo do descarte.')
+
     const quantidade = Number(String(qtd).replace(',', '.'))
     if (!(quantidade > 0)) return setErro('Informe uma quantidade maior que zero.')
 
-    // Soma o que já está no rascunho para o mesmo item, para não prometer saldo que não existe.
     if (acao !== 'entrada') {
       const jaNoRascunho = linhas
         .filter(l => l.id !== editandoId && l.itemId === item.id && l.estoqueId === estoqueId && l.tipo !== 'entrada')
         .reduce((s, l) => s + Number(l.qtd), 0)
-      if (jaNoRascunho + quantidade > saldoAtual) {
+
+      const disponivel = loteEscolhido
+        ? (lotesDoItem.find(l => (l.lote || '') === (loteEscolhido.lote || '') &&
+            (l.validade || null) === (loteEscolhido.validade || null))?.qtd || 0)
+        : saldoAtual
+
+      if (jaNoRascunho + quantidade > disponivel) {
         return setErro(
-          `Saldo insuficiente: há ${formatarNumero(saldoAtual)} ${item.unidade?.toLowerCase()} em ${estoque?.nome}` +
+          `Saldo insuficiente: há ${formatarNumero(disponivel)} ${item.unidade?.toLowerCase()}` +
+          (loteEscolhido ? ` no lote ${loteEscolhido.lote || 'sem lote'}` : ` em ${estoque?.nome}`) +
           (jaNoRascunho ? ` e ${formatarNumero(jaNoRascunho)} já está reservado nesta lista.` : '.')
         )
       }
@@ -112,13 +157,20 @@ export default function Movimentar () {
       qtd: quantidade,
       lote: acao === 'entrada' ? lote.trim() : '',
       validade: acao === 'entrada' ? (validade || null) : null,
+      loteEscolhido: acao === 'descarte' ? loteEscolhido : null,
       motivo,
-      observacao: observacao.trim()
+      observacao: observacao.trim(),
+      finalidade: acao === 'consumo' ? finalidade : '',
+      pacienteNome: acao === 'consumo' && finalidade === 'paciente' ? pacienteNome.trim() : '',
+      pacienteCPF: acao === 'consumo' && finalidade === 'paciente' ? pacienteCPF.trim() : '',
+      prescritorNome: acao === 'consumo' && finalidade === 'paciente' ? (prescritor?.nome || '') : '',
+      prescritorConselho: acao === 'consumo' && finalidade === 'paciente' ? (prescritor?.conselho || '') : '',
+      responsavelNome: acao === 'consumo' ? (responsavel?.nome || '') : '',
+      responsavelConselho: acao === 'consumo' ? (responsavel?.conselho || '') : '',
+      destinoInterno: acao === 'consumo' && finalidade === 'interno' ? destinoInterno.trim() : ''
     }
 
-    setLinhas(atual =>
-      editandoId ? atual.map(l => (l.id === editandoId ? linha : l)) : [linha, ...atual]
-    )
+    setLinhas(atual => (editandoId ? atual.map(l => (l.id === editandoId ? linha : l)) : [linha, ...atual]))
     vibrar()
     limparFormulario()
   }
@@ -133,6 +185,13 @@ export default function Movimentar () {
     setValidade(linha.validade || '')
     setMotivo(linha.motivo || '')
     setObservacao(linha.observacao || '')
+    setFinalidade(linha.finalidade || '')
+    setPacienteNome(linha.pacienteNome || '')
+    setPacienteCPF(linha.pacienteCPF || '')
+    setPrescritor(linha.prescritorNome ? { nome: linha.prescritorNome, conselho: linha.prescritorConselho } : null)
+    setResponsavel(linha.responsavelNome ? { nome: linha.responsavelNome, conselho: linha.responsavelConselho } : null)
+    setDestinoInterno(linha.destinoInterno || '')
+    setLoteEscolhido(linha.loteEscolhido || null)
     setEditandoId(linha.id)
     setDetalhes(Boolean(linha.lote || linha.validade || linha.observacao))
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -167,76 +226,69 @@ export default function Movimentar () {
     )
   }
 
-  const motivos = acao === 'entrada' ? MOTIVOS_ENTRADA : MOTIVOS_SAIDA
+  const cpfSuspeito = pacienteCPF.replace(/\D/g, '').length === 11 && !cpfValido(pacienteCPF)
 
   return (
     <>
-      {/* Estoque de origem */}
       <div className="bloco">
         <label className="rotulo" htmlFor="estoque">
           {acao === 'transferencia' ? 'Estoque de origem' : 'Estoque'}
         </label>
-        <select
-          id="estoque" className="campo" value={estoqueId}
-          onChange={e => setEstoqueId(e.target.value)}
-        >
+        <select id="estoque" className="campo" value={estoqueId} onChange={e => setEstoqueId(e.target.value)}>
           {dados.estoques.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
         </select>
       </div>
 
-      {/* Ação */}
       <div className="bloco">
         <label className="rotulo">O que você vai fazer</label>
         <div className="acao-grupo">
-          {ACOES.map(a => (
-            <button
-              key={a.id}
-              className={'acao-btn ' + a.id}
-              aria-pressed={acao === a.id}
-              onClick={() => { setAcao(a.id); setErro(''); vibrar() }}
-            >
-              <Icone nome={a.icone} />
-              {a.rotulo}
-            </button>
-          ))}
+          {Object.entries(ACOES_ESTOQUE)
+            .filter(([id]) => acoesPermitidas.includes(id))
+            .map(([id, rotulo]) => (
+              <button
+                key={id}
+                className={'acao-btn ' + id}
+                aria-pressed={acao === id}
+                onClick={() => { setAcao(id); setErro(''); setMotivo(''); vibrar() }}
+              >
+                <Icone nome={ICONES[id]} />
+                {rotulo}
+              </button>
+            ))}
         </div>
+        {acoesPermitidas.length < 4 && (
+          <p className="dica" style={{ marginTop: 7 }}>
+            {estoque?.nome} está configurado para{' '}
+            {acoesPermitidas.map(a => ACOES_ESTOQUE[a].toLowerCase()).join(', ')}.
+          </p>
+        )}
       </div>
 
       {acao === 'transferencia' && (
         <div className="bloco">
           <label className="rotulo" htmlFor="destino">Estoque de destino</label>
-          <select
-            id="destino" className="campo" value={destinoId}
-            onChange={e => setDestinoId(e.target.value)}
-          >
+          <select id="destino" className="campo" value={destinoId} onChange={e => setDestinoId(e.target.value)}>
             <option value="">Escolha o destino…</option>
-            {outrosEstoques.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            {destinosPermitidos.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
           </select>
         </div>
       )}
 
-      {/* Item */}
       <div className="bloco">
         <label className="rotulo">Item</label>
         <BuscaItem
           key={chaveBusca}
           estoqueId={estoqueId}
           escolhido={item}
-          aoEscolher={i => {
-            setItem(i)
-            setTimeout(() => campoQtd.current?.focus(), 60)
-          }}
+          aoEscolher={i => { setItem(i); setTimeout(() => campoQtd.current?.focus(), 60) }}
           aoLimpar={() => { setItem(null); setChaveBusca(k => k + 1) }}
-          autoFoco={false}
         />
       </div>
 
       {item && (
         <>
           <div className="bloco">
-            <label className="rotulo" htmlFor="qtd">
-              Quantidade em {item.unidade?.toLowerCase()}
-            </label>
+            <label className="rotulo" htmlFor="qtd">Quantidade em {item.unidade?.toLowerCase()}</label>
             <input
               id="qtd" ref={campoQtd} className="campo num" value={qtd}
               onChange={e => setQtd(e.target.value.replace(/[^\d.,]/g, ''))}
@@ -247,71 +299,175 @@ export default function Movimentar () {
               {[1, 5, 10, 20, 50, 100].map(n => (
                 <button
                   key={n} className="pilula"
-                  onClick={() => {
-                    setQtd(v => String((Number(String(v).replace(',', '.')) || 0) + n))
-                    vibrar(8)
-                  }}
+                  onClick={() => { setQtd(v => String((Number(String(v).replace(',', '.')) || 0) + n)); vibrar(8) }}
                 >+{n}</button>
               ))}
               {qtd && <button className="pilula" onClick={() => setQtd('')}>limpar</button>}
             </div>
           </div>
 
-          {acao !== 'entrada' && lotesDoItem.length > 0 && (
-            <div className="info-caixa bloco">
-              A baixa segue o PVPS: sai primeiro o lote que vence antes —{' '}
-              <b>
-                {[...lotesDoItem].sort((a, b) => (a.validade || '9999') < (b.validade || '9999') ? -1 : 1)[0]?.lote || 'sem lote'}
-                {' · '}
-                {dataBR([...lotesDoItem].sort((a, b) => (a.validade || '9999') < (b.validade || '9999') ? -1 : 1)[0]?.validade)}
-              </b>.
+          {/* ---------- CONSUMO ---------- */}
+          {acao === 'consumo' && (
+            <div className="bloco">
+              <label className="rotulo">Para que foi usado</label>
+              <div className="acao-grupo" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                {Object.entries(FINALIDADES_CONSUMO).map(([id, rotulo]) => (
+                  <button
+                    key={id} className="acao-btn consumo" aria-pressed={finalidade === id}
+                    onClick={() => { setFinalidade(id); setErro(''); vibrar(8) }}
+                    style={{ minHeight: 54 }}
+                  >{rotulo}</button>
+                ))}
+              </div>
+
+              {finalidade === 'paciente' && (
+                <div className="cartao" style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+                  <p className="dica">Todos os campos abaixo são opcionais.</p>
+                  <div>
+                    <label className="rotulo" htmlFor="pac">Paciente</label>
+                    <input
+                      id="pac" className="campo" value={pacienteNome}
+                      onChange={e => setPacienteNome(e.target.value)}
+                      autoCapitalize="words" placeholder="Nome do paciente"
+                    />
+                  </div>
+                  <div>
+                    <label className="rotulo" htmlFor="cpf">CPF</label>
+                    <input
+                      id="cpf" className="campo num" value={pacienteCPF} inputMode="numeric"
+                      onChange={e => setPacienteCPF(mascaraCPF(e.target.value))}
+                      placeholder="000.000.000-00"
+                    />
+                    {cpfSuspeito && (
+                      <p className="dica" style={{ color: 'var(--transf)', marginTop: 5 }}>
+                        Esse CPF não passa na conferência dos dígitos. Confira — mesmo assim dá para salvar.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="rotulo">Prescritor</label>
+                    <BuscaProfissional
+                      tipos={['prescritor']} rotulo="prescritor"
+                      escolhido={prescritor}
+                      aoEscolher={setPrescritor}
+                      aoLimpar={() => setPrescritor(null)}
+                    />
+                  </div>
+                  <div>
+                    <label className="rotulo">Quem administrou / dispensou</label>
+                    <BuscaProfissional
+                      tipos={['enfermeiro', 'tecnico', 'farmaceutico']} rotulo="responsável"
+                      escolhido={responsavel}
+                      aoEscolher={setResponsavel}
+                      aoLimpar={() => setResponsavel(null)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {finalidade === 'interno' && (
+                <div className="cartao" style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+                  <div>
+                    <label className="rotulo" htmlFor="dint">Onde foi usado</label>
+                    <input
+                      id="dint" className="campo" value={destinoInterno}
+                      onChange={e => setDestinoInterno(e.target.value)}
+                      placeholder="Ex.: sala de curativo, carrinho de emergência"
+                    />
+                  </div>
+                  <div>
+                    <label className="rotulo">Responsável</label>
+                    <BuscaProfissional
+                      tipos={['enfermeiro', 'tecnico', 'farmaceutico']} rotulo="responsável"
+                      escolhido={responsavel}
+                      aoEscolher={setResponsavel}
+                      aoLimpar={() => setResponsavel(null)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
+          {/* ---------- DESCARTE ---------- */}
+          {acao === 'descarte' && (
+            <div className="bloco">
+              <label className="rotulo" htmlFor="mdesc">Motivo do descarte</label>
+              <select id="mdesc" className="campo" value={motivo} onChange={e => { setMotivo(e.target.value); setErro('') }}>
+                <option value="">Escolha o motivo…</option>
+                {MOTIVOS_DESCARTE.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+
+              {lotesDoItem.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <label className="rotulo">Lote a descartar</label>
+                  <div className="pilulas" style={{ marginBottom: 0 }}>
+                    <button
+                      className="pilula" aria-pressed={!loteEscolhido}
+                      onClick={() => setLoteEscolhido(null)}
+                    >Automático (vence antes)</button>
+                    {lotesDoItem.map(l => (
+                      <button
+                        key={l.id} className="pilula"
+                        aria-pressed={
+                          loteEscolhido?.lote === (l.lote || '') &&
+                          loteEscolhido?.validade === (l.validade || null)
+                        }
+                        onClick={() => setLoteEscolhido({ lote: l.lote || '', validade: l.validade || null })}
+                      >
+                        {l.lote || 'sem lote'} · {dataBR(l.validade)} · {formatarNumero(l.qtd)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ---------- Detalhes ---------- */}
           <div className="bloco">
-            <button
-              className="btn fantasma pequeno"
-              onClick={() => setDetalhes(v => !v)}
-              style={{ padding: 0 }}
-            >
+            <button className="btn fantasma pequeno" style={{ padding: 0 }} onClick={() => setDetalhes(v => !v)}>
               {detalhesAbertos ? '− ' : '+ '}
-              {acao === 'entrada' ? 'Lote, validade e motivo (opcional)' : 'Motivo e observação (opcional)'}
+              {acao === 'entrada' ? 'Lote, validade e origem (opcional)' : 'Outros detalhes (opcional)'}
             </button>
 
             {detalhesAbertos && (
               <div className="cartao" style={{ marginTop: 10, display: 'grid', gap: 12 }}>
                 {acao === 'entrada' && (
-                  <div className="linha-campos">
-                    <div>
-                      <label className="rotulo" htmlFor="lote">Lote</label>
-                      <input
-                        id="lote" className="campo" value={lote}
-                        onChange={e => setLote(e.target.value.toUpperCase())}
-                        placeholder="Ex.: ABC1234" autoCapitalize="characters"
-                      />
+                  <>
+                    <div className="linha-campos">
+                      <div>
+                        <label className="rotulo" htmlFor="lote">Lote</label>
+                        <input
+                          id="lote" className="campo" value={lote}
+                          onChange={e => setLote(e.target.value.toUpperCase())}
+                          placeholder="Ex.: ABC1234" autoCapitalize="characters"
+                        />
+                      </div>
+                      <div>
+                        <label className="rotulo" htmlFor="validade">Validade</label>
+                        <input
+                          id="validade" className="campo" type="date" value={validade}
+                          onChange={e => setValidade(e.target.value)}
+                        />
+                      </div>
                     </div>
                     <div>
-                      <label className="rotulo" htmlFor="validade">Validade</label>
-                      <input
-                        id="validade" className="campo" type="date" value={validade}
-                        onChange={e => setValidade(e.target.value)}
-                      />
+                      <label className="rotulo" htmlFor="morig">Origem</label>
+                      <select id="morig" className="campo" value={motivo} onChange={e => setMotivo(e.target.value)}>
+                        <option value="">Não informar</option>
+                        {MOTIVOS_ENTRADA.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
                     </div>
-                  </div>
+                  </>
                 )}
                 <div>
-                  <label className="rotulo" htmlFor="motivo">Motivo</label>
-                  <select id="motivo" className="campo" value={motivo} onChange={e => setMotivo(e.target.value)}>
-                    <option value="">Não informar</option>
-                    {motivos.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className="rotulo" htmlFor="obs">Observação</label>
-                  <input
+                  <textarea
                     id="obs" className="campo" value={observacao}
                     onChange={e => setObservacao(e.target.value)}
-                    placeholder="Nota livre para o histórico"
+                    placeholder="Qualquer detalhe que precise ficar registrado"
+                    style={{ minHeight: 70 }}
                   />
                 </div>
               </div>
@@ -321,9 +477,7 @@ export default function Movimentar () {
           {erro && <div className="erro-caixa bloco">{erro}</div>}
 
           <div className="acoes bloco">
-            {editandoId && (
-              <button className="btn secundario" onClick={limparFormulario}>Cancelar edição</button>
-            )}
+            {editandoId && <button className="btn secundario" onClick={limparFormulario}>Cancelar edição</button>}
             <button className="btn" onClick={adicionar}>
               <Icone nome={editandoId ? 'certo' : 'entrada'} tamanho={18} />
               {editandoId ? 'Atualizar lançamento' : 'Adicionar à lista'}
@@ -334,7 +488,6 @@ export default function Movimentar () {
 
       {!item && erro && <div className="erro-caixa bloco">{erro}</div>}
 
-      {/* Rascunho */}
       <div className="bloco" style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
           <h2 style={{ fontSize: 16 }}>Lançamentos pendentes</h2>
@@ -356,23 +509,24 @@ export default function Movimentar () {
                     {l.tipo === 'transferencia'
                       ? `${l.estoqueNome} → ${l.estoqueDestinoNome}`
                       : l.estoqueNome}
+                    {l.finalidade === 'paciente' && ` · ${l.pacienteNome || 'paciente não identificado'}`}
+                    {l.finalidade === 'interno' && ` · uso interno${l.destinoInterno ? ': ' + l.destinoInterno : ''}`}
+                    {l.prescritorNome && ` · presc. ${l.prescritorNome}`}
                     {l.lote && ` · lote ${l.lote}`}
                     {l.validade && ` · vence ${dataBR(l.validade)}`}
+                    {l.loteEscolhido && ` · lote ${l.loteEscolhido.lote || 'sem lote'}`}
                     {l.motivo && ` · ${l.motivo}`}
                   </div>
                 </div>
                 <div className={'qtd num ' + l.tipo}>
-                  {l.tipo === 'entrada' ? '+' : l.tipo === 'saida' ? '−' : '⇄'}
+                  {l.tipo === 'entrada' ? '+' : l.tipo === 'transferencia' ? '⇄' : '−'}
                   {formatarNumero(l.qtd)}
                 </div>
                 <div className="btns">
                   <button onClick={() => editar(l)} aria-label="Editar lançamento">
                     <Icone nome="lapis" tamanho={16} />
                   </button>
-                  <button
-                    onClick={() => setLinhas(a => a.filter(x => x.id !== l.id))}
-                    aria-label="Remover lançamento"
-                  >
+                  <button onClick={() => setLinhas(a => a.filter(x => x.id !== l.id))} aria-label="Remover lançamento">
                     <Icone nome="lixeira" tamanho={16} />
                   </button>
                 </div>
@@ -386,9 +540,9 @@ export default function Movimentar () {
         <div className="barra-salvar">
           <div className="resumo">
             <b>{linhas.length} lançamento{linhas.length > 1 ? 's' : ''}</b>
-            {resumo.entrada ? `${resumo.entrada} entrada(s) ` : ''}
-            {resumo.saida ? `${resumo.saida} saída(s) ` : ''}
-            {resumo.transferencia ? `${resumo.transferencia} transf.` : ''}
+            {Object.entries(resumo)
+              .map(([t, n]) => `${n} ${ACOES_ESTOQUE[t]?.toLowerCase() || t}`)
+              .join(' · ')}
           </div>
           <button className="btn" onClick={() => setConfirmando(true)} disabled={salvando}>
             {salvando ? 'Gravando…' : 'Salvar no estoque'}

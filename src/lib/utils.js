@@ -107,12 +107,29 @@ export const NOMES_FUNCAO = {
   auxiliar: 'Auxiliar'
 }
 
+export const VERSAO = '1.1'
+
 export const TIPOS_MOVIMENTO = {
   entrada: { nome: 'Entrada', sinal: '+' },
-  saida: { nome: 'Saída', sinal: '−' },
+  consumo: { nome: 'Consumo', sinal: '−' },
+  descarte: { nome: 'Descarte', sinal: '−' },
   transferencia: { nome: 'Transferência', sinal: '⇄' },
-  inventario: { nome: 'Inventário', sinal: '=' }
+  inventario: { nome: 'Inventário', sinal: '=' },
+  saida: { nome: 'Saída', sinal: '−' }
 }
+
+/** Ações que um local de estoque pode aceitar. */
+export const ACOES_ESTOQUE = {
+  entrada: 'Adicionar',
+  consumo: 'Consumir',
+  transferencia: 'Transferir',
+  descarte: 'Descartar'
+}
+
+export const ACOES_PADRAO = ['entrada', 'consumo', 'transferencia', 'descarte']
+
+/** Tipos de movimento que retiram saldo do local. */
+export const TIPOS_QUE_CONSOMEM = ['consumo', 'descarte', 'saida', 'transferencia']
 
 export const CLASSES_CONTROLE = {
   A1: 'A1 — entorpecente (receita amarela)',
@@ -151,15 +168,58 @@ export const TIPOS_ITEM = {
   OUTRO: 'Outro'
 }
 
-export const MOTIVOS_SAIDA = [
-  'Dispensação ao paciente',
-  'Atendimento de setor',
-  'Perda por vencimento',
-  'Perda por avaria',
+export const MOTIVOS_DESCARTE = [
+  'Vencido',
+  'Danificado / avariado',
+  'Quebra ou derramamento',
+  'Falha na cadeia de frio',
+  'Recolhimento / recall',
   'Devolução ao fornecedor',
-  'Empréstimo a outra unidade',
+  'Extravio',
   'Outro'
 ]
+
+export const FINALIDADES_CONSUMO = {
+  paciente: 'Dispensação a paciente',
+  interno: 'Consumo interno do setor'
+}
+
+export const TIPOS_PROFISSIONAL = {
+  prescritor: 'Prescritor',
+  enfermeiro: 'Enfermeiro',
+  tecnico: 'Técnico de enfermagem',
+  farmaceutico: 'Farmacêutico',
+  outro: 'Outro'
+}
+
+export const CONSELHOS = ['CRM', 'COREN', 'CRF', 'CRO', 'CRMV', 'CRN', 'CRP', 'Outro']
+
+export const UFS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+]
+
+/** Formata o CPF conforme a pessoa digita. */
+export function mascaraCPF (valor) {
+  const d = String(valor || '').replace(/\D/g, '').slice(0, 11)
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
+
+/** Verificação dos dígitos do CPF — só avisa, nunca bloqueia o lançamento. */
+export function cpfValido (valor) {
+  const d = String(valor || '').replace(/\D/g, '')
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false
+  const digito = ate => {
+    let soma = 0
+    for (let i = 0; i < ate; i++) soma += Number(d[i]) * (ate + 1 - i)
+    const r = (soma * 10) % 11
+    return r === 10 ? 0 : r
+  }
+  return digito(9) === Number(d[9]) && digito(10) === Number(d[10])
+}
 
 export const MOTIVOS_ENTRADA = [
   'Compra / contrato',

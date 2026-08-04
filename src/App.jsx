@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Carregando, Icone, ProvedorAviso, Vazio } from './components/ui'
 import { ProvedorAuth, useAuth } from './lib/auth'
 import { ProvedorDados, useDados } from './lib/store'
-import { diasParaAniversario, formatarNumero } from './lib/utils'
+import { VERSAO, diasParaAniversario, formatarNumero } from './lib/utils'
 
 import Login from './screens/Login'
 import Movimentar from './screens/Movimentar'
@@ -11,22 +11,26 @@ import Pedido from './screens/Pedido'
 import Inventario from './screens/Inventario'
 import Catalogo from './screens/Catalogo'
 import Auditoria from './screens/Auditoria'
+import Movimentacoes from './screens/Movimentacoes'
 import Usuarios from './screens/Usuarios'
 import Locais from './screens/Locais'
+import Profissionais from './screens/Profissionais'
 import Config from './screens/Config'
 import Perfil from './screens/Perfil'
 
 /* Telas: as quatro primeiras ficam na barra inferior; o resto abre pelo menu Mais. */
 const TELAS = {
-  movimentar: { titulo: 'Movimentar', subtitulo: 'Adicionar, retirar ou transferir', icone: 'transferencia', comp: Movimentar },
+  movimentar: { titulo: 'Movimentar', subtitulo: 'Adicionar, consumir, transferir ou descartar', icone: 'transferencia', comp: Movimentar },
   estoque: { titulo: 'Estoque', subtitulo: 'Saldos, lotes e validades', icone: 'caixa', comp: Estoque },
   pedido: { titulo: 'Pedido', subtitulo: 'Sugestão de reposição', icone: 'pedido', comp: Pedido },
   mais: { titulo: 'Mais', subtitulo: '', icone: 'menu', comp: null },
 
   inventario: { titulo: 'Inventário', subtitulo: 'Contagem que substitui o saldo', comp: Inventario, exige: 'farmaceutico' },
   catalogo: { titulo: 'Catálogo', subtitulo: 'Itens, categorias e estoque mínimo', comp: Catalogo, exige: 'farmaceutico' },
-  auditoria: { titulo: 'Auditoria', subtitulo: 'Histórico completo do sistema', comp: Auditoria, exige: 'farmaceutico' },
-  locais: { titulo: 'Locais de estoque', subtitulo: '', comp: Locais },
+  movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
+  auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
+  locais: { titulo: 'Locais de estoque', subtitulo: 'Regras de cada setor', comp: Locais },
+  profissionais: { titulo: 'Profissionais', subtitulo: 'Prescritores, enfermeiros e técnicos', comp: Profissionais },
   usuarios: { titulo: 'Pessoas', subtitulo: 'Acessos, funções e aniversários', comp: Usuarios },
   config: { titulo: 'Configurações', subtitulo: '', comp: Config, exige: 'adm' },
   perfil: { titulo: 'Meu perfil', subtitulo: '', comp: Perfil }
@@ -141,7 +145,10 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
 
   const vencidos = dados.vencendo.filter(l => l.dias < 0)
 
-  const opcoes = ['inventario', 'catalogo', 'auditoria', 'locais', 'usuarios', 'config', 'perfil']
+  const opcoes = [
+    'movimentacoes', 'inventario', 'catalogo', 'profissionais',
+    'auditoria', 'locais', 'usuarios', 'config', 'perfil'
+  ]
     .filter(podeVer)
 
   return (
@@ -187,8 +194,9 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
         {opcoes.map(chave => (
           <button key={chave} className="menu-item" onClick={() => aoAbrir(chave)}>
             <Icone nome={{
-              inventario: 'inventario', catalogo: 'etiqueta', auditoria: 'historico',
-              locais: 'caixa', usuarios: 'usuarios', config: 'engrenagem', perfil: 'cadeado'
+              movimentacoes: 'historico', inventario: 'inventario', catalogo: 'etiqueta',
+              profissionais: 'usuarios', auditoria: 'cadeado', locais: 'caixa',
+              usuarios: 'usuarios', config: 'engrenagem', perfil: 'pessoa'
             }[chave]} />
             <span>
               {TELAS[chave].titulo}
@@ -217,6 +225,8 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
 
       <p className="dica" style={{ textAlign: 'center', marginTop: 18 }}>
         {perfil.nome} · {perfil.email}
+        <br />
+        versão {VERSAO}
       </p>
     </>
   )
@@ -228,7 +238,7 @@ function SemPerfil () {
     <div className="conteudo" style={{ paddingTop: 60 }}>
       <Vazio
         titulo="Conta ainda sem permissão"
-        texto={`A conta ${usuario.email} existe, mas ninguém liberou o acesso ao estoque. Peça ao administrador para cadastrar você em Mais › Pessoas.`}
+        texto={`A conta ${usuario.email} não tem acesso liberado ao estoque. O cadastro é feito pelo administrador — procure a farmácia.`}
         acao={<button className="btn secundario" onClick={sair}>Sair</button>}
       />
     </div>

@@ -1,4 +1,4 @@
-# Controle de estoque · Farmácia
+# Controle de estoque · Farmácia — v1.1
 
 Sistema de estoque para farmácia hospitalar, feito para funcionar bem no celular
 e também no computador. React + Vite, com Firebase (Authentication + Firestore)
@@ -8,7 +8,7 @@ e publicação no Firebase Hosting.
 
 ## O que o sistema faz
 
-- **Movimentar** — escolhe o local, a ação (adicionar, retirar ou transferir) e o item.
+- **Movimentar** — escolhe o local, a ação (adicionar, consumir, transferir ou descartar) e o item.
   Cada lançamento entra numa **lista de rascunho** que pode ser editada ou apagada.
   O estoque só muda quando você toca em **Salvar no estoque**.
 - **Busca com sugestão** — a lista aparece já nas primeiras letras, procurando por
@@ -16,13 +16,24 @@ e publicação no Firebase Hosting.
 - **Lote e validade** opcionais na entrada. Na saída e na transferência a baixa é
   automática por **PVPS** (primeiro que vence, primeiro que sai). Lotes sem validade
   são consumidos por último.
+- **Consumir** — baixa do saldo do próprio setor, então o histórico mostra quem gastou.
+  A cada lançamento escolhe-se entre dispensação a paciente ou consumo interno.
+  Paciente, CPF, prescritor e quem administrou são opcionais; prescritor e responsável
+  saem do cadastro de profissionais, já com o conselho preenchido.
+- **Descartar** — baixa de vencido, danificado, recall, extravio ou devolução ao
+  fornecedor. Dá para escolher o lote exato a descartar, em vez do automático.
+- **Regras por local** — cada estoque define o que aceita e para onde transfere.
+  Um almoxarifado pode ficar só com receber, repassar e descartar, sem dispensar.
 - **Inventário** — contagem que **substitui** o saldo, e não soma nem subtrai.
   Restrito a farmacêutico e administrador.
 - **Pedido** — sugestão de reposição combinando estoque mínimo e consumo médio:
   `necessidade = maior valor entre (estoque mínimo) e (consumo diário × dias × margem)`,
   descontando o saldo atual. Exporta CSV e copia a lista pronta.
-- **Auditoria** — histórico completo de movimentações e registro das ações do sistema.
-  Restrito a farmacêutico e administrador.
+- **Movimentações** — histórico de todos os lançamentos, com busca por item, pessoa,
+  motivo ou lote, e filtros por tipo, local e período. Exporta CSV do que estiver
+  filtrado. Aberto a todos os perfis: cada linha mostra quem lançou.
+- **Auditoria** — registro das ações feitas no sistema (catálogo, usuários,
+  configurações). Restrito a farmacêutico e administrador.
 - **Pessoas** — cadastro com função, data de nascimento e lembrete de aniversário,
   troca e recuperação de senha.
 - **Catálogo** com 239 itens já classificados (grupo ATC, grupo farmacológico,
@@ -37,7 +48,8 @@ e publicação no Firebase Hosting.
 | Sugestão de pedido | sim | sim | sim |
 | Inventário | não | sim | sim |
 | Catálogo de itens | leitura | edição | edição |
-| Auditoria e histórico | não | sim | sim |
+| Histórico de movimentações | sim | sim | sim |
+| Auditoria do sistema | não | sim | sim |
 | Locais de estoque | leitura | leitura | edição |
 | Pessoas e configurações | não | não | sim |
 
@@ -91,13 +103,21 @@ As regras e os índices precisam ir **antes** do primeiro uso: sem eles o app
 não consegue ler nem gravar, e as telas de pedido e auditoria ficam sem resposta.
 Os índices levam um ou dois minutos para ficarem prontos.
 
-## 5. Primeiro acesso
+## 5. Acessos
 
-Abra o site, toque em **Primeiro acesso do sistema** e crie a conta do
-administrador. Nesse momento o sistema carrega sozinho o catálogo padrão e quatro
-locais de estoque (Farmácia Central, Emergência, Enfermaria e Centro Cirúrgico),
-todos com saldo zerado. Depois disso a opção deixa de funcionar — as demais
-pessoas passam a ser cadastradas em **Mais › Pessoas**.
+Não existe autocadastro. Todo acesso é criado pelo administrador em
+**Mais › Pessoas**, com nome, função, data de nascimento e uma senha provisória
+que a própria pessoa troca depois em **Meu perfil**. As regras do Firestore
+recusam a criação de perfil por qualquer outra via.
+
+O primeiro administrador foi criado na implantação. Se um dia todos os
+administradores forem perdidos, a recuperação é manual: criar o documento em
+`usuarios/{uid}` com `funcao: "adm"` e `ativo: true` pelo Console do Firebase.
+
+Para fechar também a criação de contas de login no próprio Firebase, vá em
+**Authentication > Settings > User actions** e marque *Prevent account creation*.
+Atenção: com essa opção ligada, o cadastro pela tela Pessoas para de funcionar,
+e as contas passam a ser criadas manualmente no Console.
 
 Sugestão de sequência para começar: ajuste os locais, revise o estoque mínimo dos
 itens principais no catálogo e faça o inventário inicial pela tela de Inventário.
@@ -159,7 +179,8 @@ mantém um cache local — o que for lançado offline sobe assim que a conexão 
 |---|---|
 | `usuarios/{uid}` | nome, e-mail, função, nascimento, telefone, registro, ativo |
 | `config/app` | nome da unidade, dias de cobertura, margem, alertas, regras |
-| `estoques/{id}` | locais de estoque |
+| `estoques/{id}` | locais de estoque, com ações e destinos permitidos |
+| `profissionais/{id}` | prescritores, enfermeiros e técnicos com conselho e registro |
 | `itens/{id}` | catálogo com toda a classificação |
 | `saldos/{local__item}` | saldo consolidado, para as listas carregarem rápido |
 | `lotes/{local__item__lote__validade}` | saldo por lote, base do PVPS |
@@ -175,7 +196,8 @@ o sistema como registro confiável de medicamentos controlados.
 Cada movimentação já grava, junto: código e descrição do item, tipo
 (medicamento, material, nutrição), grupo ATC, grupo farmacológico, classe de
 controle, unidade, local de origem e destino, lote e validade, os lotes de onde
-a quantidade saiu, motivo, observação, responsável e função. Ou seja, dá para
+a quantidade saiu, finalidade, paciente e CPF, prescritor e registro, quem
+administrou, onde foi usado internamente, motivo, observação, quem lançou e função. Ou seja, dá para
 recortar o consumo por classe terapêutica, por setor, por período, por
 responsável ou por classe de controle sem precisar cruzar planilhas depois.
 
