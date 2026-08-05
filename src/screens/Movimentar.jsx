@@ -50,6 +50,7 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
   // Descarte
   const [loteEscolhido, setLoteEscolhido] = useState(null)
   const [estornoDe, setEstornoDe] = useState('')
+  const [maximoEstorno, setMaximoEstorno] = useState(0)
 
   const [linhas, setLinhas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(RASCUNHO) || '[]') } catch { return [] }
@@ -72,7 +73,8 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
     setAcao('devolucao')
     setEstoqueId(m.estoqueId)
     setItem(dados.itemPorId(m.itemId) || null)
-    setQtd(String(m.qtd))
+    setQtd(String(m.maximo || m.qtd))
+    setMaximoEstorno(Number(m.maximo || m.qtd))
     setMotivo('Erro de dispensação')
     setPacienteNome(m.pacienteNome || '')
     setDestinoInterno(m.destinoInterno || m.estoqueNome || '')
@@ -126,7 +128,7 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
     setObservacao(''); setEditandoId(null); setErro('')
     setFinalidade(''); setPacienteNome(''); setPacienteCPF('')
     setPrescritor(null); setResponsavel(null); setDestinoInterno('')
-    setLoteEscolhido(null); setMotivo(''); setEstornoDe('')
+    setLoteEscolhido(null); setMotivo(''); setEstornoDe(''); setMaximoEstorno(0)
     setChaveBusca(k => k + 1)
   }
 
@@ -142,6 +144,9 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
 
     const quantidade = Number(String(qtd).replace(',', '.'))
     if (!(quantidade > 0)) return setErro('Informe uma quantidade maior que zero.')
+    if (estornoDe && maximoEstorno && quantidade > maximoEstorno) {
+      return setErro(`O estorno não pode passar de ${maximoEstorno} — é o que resta da saída original.`)
+    }
 
     if (!SOMA_AO_ESTOQUE.includes(acao)) {
       const jaNoRascunho = linhas
@@ -419,6 +424,11 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
           {/* ---------- DEVOLUÇÃO ---------- */}
           {acao === 'devolucao' && (
             <div className="bloco">
+              {estornoDe && (
+                <div className="aviso-caixa" style={{ marginBottom: 12 }}>
+                  Estorno de uma saída já registrada. Máximo a devolver: <b>{maximoEstorno}</b>.
+                </div>
+              )}
               <div className="info-caixa" style={{ marginBottom: 12 }}>
                 O item volta para o saldo deste estoque. Use para sobra de setor,
                 alta do paciente ou correção de uma baixa feita errado.

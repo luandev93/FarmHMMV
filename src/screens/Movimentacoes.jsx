@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icone, Vazio } from '../components/ui'
 import { useDados } from '../lib/store'
-import { movimentosRecentes } from '../lib/db'
+import { movimentosRecentes, estornosPorMovimento } from '../lib/db'
 import {
   FINALIDADES_CONSUMO, NOMES_FUNCAO, baixarCSV, dataBR, dataHora, formatarNumero, semAcento
 } from '../lib/utils'
@@ -22,7 +22,15 @@ export default function Movimentacoes ({ aoEstornar }) {
   const [periodo, setPeriodo] = useState(30)
   const [busca, setBusca] = useState('')
   const [linhas, setLinhas] = useState(null)
+  const [estornado, setEstornado] = useState({})
   const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    estornosPorMovimento().then(setEstornado).catch(() => setEstornado({}))
+  }, [linhas])
+
+  /** Quanto ainda pode ser estornado de uma saída. */
+  const restaEstornar = m => Math.max(0, (m.qtd || 0) - (estornado[m.id] || 0))
 
   useEffect(() => {
     let vivo = true
@@ -148,11 +156,17 @@ export default function Movimentacoes ({ aoEstornar }) {
                     {formatarNumero(m.qtd)}
                   </div>
                   {aoEstornar && ['consumo', 'saida'].includes(m.tipo) && (
-                    <button
-                      className="btn secundario pequeno"
-                      style={{ minHeight: 32, fontSize: 12.5, padding: '0 10px' }}
-                      onClick={() => aoEstornar(m)}
-                    >Estornar</button>
+                    restaEstornar(m) > 0 ? (
+                      <button
+                        className="btn secundario pequeno"
+                        style={{ minHeight: 32, fontSize: 12.5, padding: '0 10px' }}
+                        onClick={() => aoEstornar({ ...m, maximo: restaEstornar(m) })}
+                      >
+                        Estornar{restaEstornar(m) < m.qtd ? ` ${restaEstornar(m)}` : ''}
+                      </button>
+                    ) : (
+                      <span className="etq ok">estornado</span>
+                    )
                   )}
                 </div>
               </div>

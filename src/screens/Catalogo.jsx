@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import { Confirmar, Icone, Painel, Vazio, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
-import { salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao } from '../lib/db'
+import {
+  salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao, mesclarItens
+} from '../lib/db'
 import {
   CLASSES_CONTROLE, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
   baixarCSV, formatarNumero, semAcento
@@ -31,6 +33,7 @@ export default function Catalogo () {
   const [previa, setPrevia] = useState(null)
   const [criarNovos, setCriarNovos] = useState(false)
   const [aplicando, setAplicando] = useState(false)
+  const [mesclando, setMesclando] = useState(null)
   const arquivo = useRef(null)
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
@@ -272,10 +275,28 @@ export default function Catalogo () {
           somenteLeitura={!ehFarmaceutico}
           aoFechar={() => setEditando(null)}
           aoExcluir={() => { setExcluindo(editando); setEditando(null) }}
+          aoMesclar={() => { setMesclando(editando); setEditando(null) }}
           aoSalvar={async dadosItem => {
             await salvarItem(dadosItem, ctx, editando.id || null)
             setEditando(null)
             avisar('Item salvo.', 'ok')
+          }}
+        />
+      )}
+
+      {mesclando && (
+        <PainelMesclagem
+          origem={mesclando}
+          aoFechar={() => setMesclando(null)}
+          aoConfirmar={async destino => {
+            const movido = await mesclarItens(mesclando, destino, ctx)
+            setMesclando(null)
+            avisar(
+              movido > 0
+                ? `${movido} unidade(s) movidas para ${destino.codigo}.`
+                : 'Itens mesclados.',
+              'ok'
+            )
           }}
         />
       )}
@@ -303,7 +324,7 @@ export default function Catalogo () {
   )
 }
 
-function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, somenteLeitura }) {
+function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, aoMesclar, somenteLeitura }) {
   const [f, setF] = useState({ ...VAZIO, ...item })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -348,6 +369,21 @@ function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, somenteLeitura }
         )
       }
     >
+      {item.id && !somenteLeitura && (
+        <button
+          className="btn secundario bloco-largo" style={{ marginTop: 14 }}
+          onClick={aoMesclar}
+        >
+          <Icone nome="transferencia" tamanho={18} /> Este item é duplicado de outro
+        </button>
+      )}
+
+      {item.mescladoCodigo && (
+        <div className="aviso-caixa" style={{ marginTop: 12 }}>
+          Este item foi absorvido por <b>{item.mescladoCodigo}</b> e não aparece mais nas buscas.
+        </div>
+      )}
+
       <fieldset disabled={somenteLeitura} style={{ border: 0, padding: 0, margin: 0 }}>
         <div className="campos">
           <div className="linha-campos">
@@ -506,5 +542,103 @@ function Marcador ({ rotulo, valor, aoTrocar }) {
       />
       {rotulo}
     </label>
+  )
+}
+
+
+/**
+ * Junta dois cadastros do mesmo produto. O saldo vai para o item escolhido e o
+ * duplicado é desativado — nada é apagado, e o histórico dos dois permanece.
+ */
+function PainelMesclagem ({ origem, aoConfirmar, aoFechar }) {
+  const dados = useDados()
+  const [busca, setBusca] = useState('')
+  const [destino, setDestino] = useState(null)
+  const [ocupado, setOcupado] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const saldoOrigem = dados.saldoTotal(origem.id)
+
+  const candidatos = useMemo(() => {
+    const t = semAcento(busca).trim()
+    if (!t) return []
+    return dados.itens
+      .filter(i => i.id !== origem.id && i.ativo !== false)
+      .filter(i => semAcento(`${i.descricao} ${i.principioAtivo} ${i.codigo}`).includes(t))
+      .slice(0, 20)
+  }, [busca, dados.itens, origem.id])
+
+  return (
+    <Painel
+      titulo="Juntar itens duplicados"
+      descricao={`${origem.codigo} — ${origem.descricao}`}
+      aoFechar={aoFechar}
+      rodape={
+        <>
+          <button className="btn secundario" onClick={aoFechar}>Cancelar</button>
+          <button
+            className="btn" disabled={!destino || ocupado}
+            onClick={async () => {
+              setOcupado(true)
+              setErro('')
+              try { await aoConfirmar(destino) } catch (e) { setErro(e.message) } finally { setOcupado(false) }
+            }}
+          >{ocupado ? 'Juntando…' : 'Juntar'}</button>
+        </>
+      }
+    >
+      <div className="info-caixa" style={{ marginTop: 12 }}>
+        O saldo de <b>{origem.codigo}</b> ({formatarNumero(saldoOrigem)} {origem.unidade?.toLowerCase()})
+        passa para o item que você escolher. Depois disso, <b>{origem.codigo}</b> sai das
+        buscas e dos lançamentos, mas continua no histórico.
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <label className="rotulo">Item que vai continuar</label>
+        {destino ? (
+          <div className="item-escolhido">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 650 }}>{destino.descricao}</div>
+              <div className="dica" style={{ marginTop: 3 }}>
+                {destino.codigo} · saldo atual {formatarNumero(dados.saldoTotal(destino.id))}
+              </div>
+            </div>
+            <button className="x" onClick={() => setDestino(null)} aria-label="Trocar">×</button>
+          </div>
+        ) : (
+          <>
+            <input
+              className="campo" value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Busque o item correto" autoFocus
+            />
+            {candidatos.length > 0 && (
+              <div className="sugestoes" style={{ position: 'static', marginTop: 8, maxHeight: 260 }}>
+                {candidatos.map(i => (
+                  <button key={i.id} className="sugestao" onClick={() => setDestino(i)}>
+                    <div className="principal">{i.descricao}</div>
+                    <div className="meta">
+                      <span className="etq">{i.codigo}</span>
+                      <span>saldo {formatarNumero(dados.saldoTotal(i.id))}</span>
+                      {i.unidade !== origem.unidade && (
+                        <span className="etq alerta">unidade diferente: {i.unidade?.toLowerCase()}</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {destino && destino.unidade !== origem.unidade && (
+        <div className="aviso-caixa" style={{ marginTop: 14 }}>
+          As unidades são diferentes ({origem.unidade?.toLowerCase()} e {destino.unidade?.toLowerCase()}).
+          Confirme que é o mesmo produto antes de juntar — o saldo é somado sem conversão.
+        </div>
+      )}
+
+      {erro && <div className="erro-caixa" style={{ marginTop: 14 }}>{erro}</div>}
+    </Painel>
   )
 }

@@ -222,6 +222,25 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
   const carimbo = serverTimestamp()
   const grupo = idAleatorio()
 
+  // Estorno não pode devolver mais do que a saída original, nem repetir.
+  const comEstorno = linhas.filter(l => l.estornoDe)
+  if (comEstorno.length) {
+    const jaEstornado = await estornosPorMovimento()
+    for (const l of comEstorno) {
+      const original = await getDoc(doc(db, 'movimentos', l.estornoDe))
+      if (!original.exists()) throw new Error('A movimentação que você quer estornar não existe mais.')
+      const saiu = original.data().qtd || 0
+      const restante = saiu - (jaEstornado[l.estornoDe] || 0)
+      if (Number(l.qtd) > restante) {
+        throw new Error(
+          restante <= 0
+            ? `"${l.itemDescricao}" já foi estornado por completo.`
+            : `Só restam ${restante} para estornar de "${l.itemDescricao}".`
+        )
+      }
+    }
+  }
+
   for (const linha of linhas) {
     const qtd = Number(linha.qtd)
     if (!(qtd > 0)) throw new Error(`Quantidade inválida em "${linha.itemDescricao}".`)
@@ -679,8 +698,12 @@ const COLUNAS = {
   formaFarmaceutica: ['forma', 'forma farmaceutica'],
   grupoFarmacologico: ['grupo farmacologico'],
   grupoATC: ['grupo atc'],
-  controlado: ['controle', 'controlado', 'controle especial']
+  controlado: ['controle', 'controlado', 'controle especial'],
+  ativo: ['ativo', 'item ativo']
 }
+
+/** Colunas que chegam como "sim"/"não" e viram verdadeiro ou falso. */
+const BOOLEANOS = ['ativo']
 
 const NUMERICOS = ['precoContrato', 'estoqueMinimo']
 
@@ -744,7 +767,10 @@ export function prepararImportacao (linhas, itens) {
       if (campo === 'codigo') return
       let v = String(linha[pos] ?? '').trim()
       if (v === '') return
-      if (NUMERICOS.includes(campo)) {
+      if (BOOLEANOS.includes(campo)) {
+        const t = SEM_ACENTO(v)
+        v = ['sim', 'true', '1', 'x', 'verdadeiro'].includes(t)
+      } else if (NUMERICOS.includes(campo)) {
         const numero = Number(v.replace(/\./g, '').replace(',', '.'))
         if (!Number.isFinite(numero)) return
         v = numero
@@ -764,9 +790,11 @@ export function prepararImportacao (linhas, itens) {
     const mudancas = {}
     Object.entries(valores).forEach(([campo, v]) => {
       const atual = existente[campo]
-      const igual = NUMERICOS.includes(campo)
-        ? Number(atual || 0) === Number(v)
-        : String(atual || '') === String(v)
+      const igual = BOOLEANOS.includes(campo)
+        ? Boolean(atual !== false) === Boolean(v)
+        : NUMERICOS.includes(campo)
+          ? Number(atual || 0) === Number(v)
+          : String(atual || '') === String(v)
       if (!igual) mudancas[campo] = v
     })
 
@@ -961,4 +989,119 @@ export async function recusarSolicitacao (solicitacao, motivo, ctx) {
     `${solicitacao.setor || 'setor'} · ${motivo}`,
     'solicitacoes', solicitacao.id
   )
+}
+
+/* =========================================================
+   Mesclagem de itens duplicados
+   ========================================================= */
+
+/**
+ * Move todo o saldo de um item para outro e desativa o que foi absorvido.
+ * O histórico dos dois continua intacto: nada é apagado, e a transferência
+ * fica registrada como movimentação em cada local afetado.
+ */
+export async function mesclarItens (origem, destino, ctx) {
+  if (!origem?.id || !destino?.id) throw new Error('Escolha os dois itens.')
+  if (origem.id === destino.id) throw new Error('Escolha itens diferentes.')
+
+  const snap = await getDocs(query(collection(db, 'lotes'), where('itemId', '==', origem.id)))
+  const lotes = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => (l.qtd || 0) > 0)
+
+  const operacoes = []
+  const carimbo = serverTimestamp()
+  const porEstoque = {}
+
+  for (const l of lotes) {
+    // zera no item antigo
+    operacoes.push({
+      tipo: 'set', ref: doc(db, 'lotes', l.id),
+      dados: { qtd: 0, atualizadoEm: carimbo }, merge: true
+    })
+    // soma no item que fica
+    const alvo = idLote(l.estoqueId, destino.id, l.lote, l.validade)
+    operacoes.push({
+      tipo: 'set', ref: doc(db, 'lotes', alvo),
+      dados: {
+        estoqueId: l.estoqueId,
+        itemId: destino.id,
+        itemDescricao: destino.descricao,
+        lote: l.lote || '',
+        validade: l.validade || null,
+        qtd: increment(l.qtd),
+        atualizadoEm: carimbo
+      },
+      merge: true
+    })
+    porEstoque[l.estoqueId] = (porEstoque[l.estoqueId] || 0) + l.qtd
+  }
+
+  for (const [estoqueId, qtd] of Object.entries(porEstoque)) {
+    operacoes.push(opSaldo(estoqueId, origem.id, -qtd, carimbo))
+    operacoes.push(opSaldo(estoqueId, destino.id, qtd, carimbo))
+    operacoes.push({
+      tipo: 'add', ref: collection(db, 'movimentos'),
+      dados: {
+        tipo: 'inventario',
+        itemId: destino.id,
+        itemCodigo: destino.codigo,
+        itemDescricao: destino.descricao,
+        itemUnidade: destino.unidade,
+        itemTipo: destino.tipo || '',
+        itemControlado: destino.controlado || '',
+        estoqueId,
+        estoqueNome: '',
+        qtd,
+        motivo: 'Mesclagem de itens duplicados',
+        observacao: `Saldo recebido de ${origem.codigo} — ${origem.descricao}`,
+        usuarioUid: ctx.uid,
+        usuarioNome: ctx.nome,
+        usuarioFuncao: ctx.funcao,
+        criadoEm: carimbo
+      }
+    })
+  }
+
+  // o item absorvido sai de circulação, mas continua existindo para o histórico
+  operacoes.push({
+    tipo: 'set', ref: doc(db, 'itens', origem.id),
+    dados: {
+      ativo: false,
+      mescladoEm: destino.id,
+      mescladoCodigo: destino.codigo,
+      atualizadoEm: carimbo
+    },
+    merge: true
+  })
+
+  await gravarEmBlocos(operacoes)
+  try { await deleteDoc(doc(db, 'catalogoPublico', origem.id)) } catch (e) { /* já não existia */ }
+
+  await registrarLog(
+    ctx, 'itens-mesclados',
+    `${origem.codigo} (${origem.descricao}) absorvido por ${destino.codigo} (${destino.descricao}) — ${lotes.length} lote(s)`,
+    'itens', destino.id
+  )
+  return lotes.reduce((s, l) => s + l.qtd, 0)
+}
+
+/* =========================================================
+   Controle de estorno
+   ========================================================= */
+
+/** Quanto já foi estornado de cada movimentação, para não estornar duas vezes. */
+export async function estornosPorMovimento (dias = 365) {
+  const desde = new Date(Date.now() - dias * 86400000)
+  const snap = await getDocs(query(
+    collection(db, 'movimentos'),
+    where('tipo', '==', 'devolucao'),
+    where('criadoEm', '>=', Timestamp.fromDate(desde)),
+    orderBy('criadoEm', 'desc'),
+    limit(2000)
+  ))
+  const mapa = {}
+  snap.docs.forEach(d => {
+    const m = d.data()
+    if (m.estornoDe) mapa[m.estornoDe] = (mapa[m.estornoDe] || 0) + (m.qtd || 0)
+  })
+  return mapa
 }
