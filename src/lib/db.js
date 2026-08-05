@@ -1,6 +1,6 @@
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-  query, where, orderBy, limit, writeBatch, increment, serverTimestamp, Timestamp
+  query, where, orderBy, limit, writeBatch, increment, serverTimestamp, Timestamp, onSnapshot
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { chaveSaldo, ordemFEFO, idAleatorio } from './utils'
@@ -119,10 +119,12 @@ export async function salvarItem (dados, ctx, id = null) {
   }
   if (id) {
     await updateDoc(doc(db, 'itens', id), corpo)
+    await espelharItem(id, { ...dados, ...corpo })
     await registrarLog(ctx, 'item-editado', corpo.descricao, 'itens', id)
     return id
   }
   const ref = await addDoc(collection(db, 'itens'), { ...corpo, criadoEm: serverTimestamp() })
+  await espelharItem(ref.id, corpo)
   await registrarLog(ctx, 'item-criado', corpo.descricao, 'itens', ref.id)
   return ref.id
 }
@@ -133,6 +135,7 @@ export async function excluirItem (item, ctx) {
     throw new Error('Este item ainda tem saldo em estoque. Zere o saldo antes de excluir, ou desative o item.')
   }
   await deleteDoc(doc(db, 'itens', item.id))
+  try { await deleteDoc(doc(db, 'catalogoPublico', item.id)) } catch (e) { /* já não existia */ }
   await registrarLog(ctx, 'item-excluido', item.descricao, 'itens', item.id)
 }
 
@@ -798,4 +801,147 @@ export async function aplicarImportacao ({ atualizacoes, novos }, ctx, { criarNo
     `${atualizacoes.length} item(ns) atualizados e ${criados} criado(s) por planilha`
   )
   return { atualizados: atualizacoes.length, criados }
+}
+
+/* =========================================================
+   Catálogo público — o que a enfermagem enxerga
+   ========================================================= */
+
+/** Só o essencial para escolher o item. Nunca preço, nunca saldo. */
+const enxugar = item => ({
+  codigo: item.codigo || '',
+  descricao: item.descricao || '',
+  unidade: item.unidade || 'UNIDADE',
+  tipo: item.tipo || '',
+  principioAtivo: item.principioAtivo || '',
+  controlado: item.controlado || '',
+  ativo: item.ativo !== false
+})
+
+/** Reescreve o espelho inteiro a partir do catálogo. */
+export async function sincronizarCatalogoPublico (ctx) {
+  const [itens, espelho] = await Promise.all([
+    getDocs(collection(db, 'itens')),
+    getDocs(collection(db, 'catalogoPublico'))
+  ])
+
+  const atuais = new Set(itens.docs.map(d => d.id))
+  let lote = writeBatch(db)
+  let n = 0
+  const comitar = async () => { if (n) { await lote.commit(); lote = writeBatch(db); n = 0 } }
+
+  for (const d of itens.docs) {
+    lote.set(doc(db, 'catalogoPublico', d.id), { ...enxugar(d.data()), atualizadoEm: serverTimestamp() })
+    if (++n >= 400) await comitar()
+  }
+  // remove do espelho o que saiu do catálogo
+  for (const d of espelho.docs) {
+    if (atuais.has(d.id)) continue
+    lote.delete(doc(db, 'catalogoPublico', d.id))
+    if (++n >= 400) await comitar()
+  }
+  await comitar()
+
+  if (ctx) await registrarLog(ctx, 'catalogo-publico', `Espelho sincronizado com ${itens.size} itens`)
+  return itens.size
+}
+
+/** Mantém uma linha do espelho em dia, chamada junto com o salvamento do item. */
+export async function espelharItem (id, dados) {
+  try {
+    await setDoc(doc(db, 'catalogoPublico', id), { ...enxugar(dados), atualizadoEm: serverTimestamp() }, { merge: true })
+  } catch (e) {
+    console.warn('espelho não atualizado', e)
+  }
+}
+
+/* =========================================================
+   Solicitações da enfermagem
+   ========================================================= */
+
+export function assinarSolicitacoes (aoReceber, aoFalhar) {
+  return onSnapshot(
+    query(collection(db, 'solicitacoes'), orderBy('criadoEm', 'desc'), limit(300)),
+    s => aoReceber(s.docs.map(d => ({ id: d.id, ...d.data() }))),
+    e => aoFalhar && aoFalhar(e)
+  )
+}
+
+/**
+ * Atende a solicitação: baixa o estoque da farmácia de dispensação e
+ * carimba quem pediu e quem liberou. Quantidade zero significa item não atendido.
+ */
+export async function atenderSolicitacao (solicitacao, linhasAtendidas, ctx, opcoes = {}) {
+  const estoqueId = opcoes.estoqueId
+  if (!estoqueId) throw new Error('Defina a farmácia de dispensação em Configurações antes de atender.')
+
+  const aBaixar = linhasAtendidas.filter(l => Number(l.qtdAtendida) > 0)
+  if (!aBaixar.length) throw new Error('Nenhuma quantidade foi liberada. Use "Recusar" se for o caso.')
+
+  // Controlado exige paciente e prescritor identificados, mesmo que o pedido tenha vindo sem.
+  const controladoSemDados = aBaixar.some(l => l.controlado) &&
+    (!solicitacao.pacienteNome || !solicitacao.prescritorNome)
+  if (controladoSemDados) {
+    throw new Error('Há item de controle especial sem paciente ou prescritor informado. Recuse e peça o reenvio.')
+  }
+
+  const lancamentos = aBaixar.map(l => ({
+    tipo: 'consumo',
+    estoqueId,
+    estoqueNome: opcoes.estoqueNome || '',
+    itemId: l.itemId,
+    itemCodigo: l.codigo,
+    itemDescricao: l.descricao,
+    itemUnidade: l.unidade,
+    itemTipo: l.tipo || '',
+    itemControlado: l.controlado || '',
+    qtd: Number(l.qtdAtendida),
+    finalidade: solicitacao.pacienteNome ? 'paciente' : 'interno',
+    pacienteNome: solicitacao.pacienteNome || '',
+    pacienteCPF: solicitacao.pacienteCPF || '',
+    prescritorNome: solicitacao.prescritorNome || '',
+    prescritorConselho: solicitacao.prescritorConselho || '',
+    responsavelNome: solicitacao.solicitanteNome || '',
+    responsavelConselho: solicitacao.solicitanteConselho || '',
+    destinoInterno: solicitacao.setor || '',
+    motivo: 'Solicitação da enfermagem',
+    observacao: [solicitacao.observacao, opcoes.observacao].filter(Boolean).join(' · ')
+  }))
+
+  await salvarLancamentos(lancamentos, ctx, { permitirNegativo: false })
+
+  const pediu = solicitacao.linhas.reduce((s, l) => s + Number(l.qtdSolicitada || 0), 0)
+  const saiu = aBaixar.reduce((s, l) => s + Number(l.qtdAtendida), 0)
+
+  await updateDoc(doc(db, 'solicitacoes', solicitacao.id), {
+    status: saiu < pediu ? 'parcial' : 'atendida',
+    linhas: linhasAtendidas.map(l => ({ ...l, qtdAtendida: Number(l.qtdAtendida) || 0 })),
+    decididoPorUid: ctx.uid,
+    decididoPorNome: ctx.nome,
+    decididoEm: serverTimestamp(),
+    observacaoFarmacia: opcoes.observacao || ''
+  })
+
+  await registrarLog(
+    ctx, 'solicitacao-atendida',
+    `${solicitacao.setor || 'setor não informado'} · ${aBaixar.length} item(ns) liberados de ${solicitacao.linhas.length}`,
+    'solicitacoes', solicitacao.id
+  )
+  return aBaixar.length
+}
+
+export async function recusarSolicitacao (solicitacao, motivo, ctx) {
+  if (!motivo) throw new Error('Informe o motivo da recusa.')
+  await updateDoc(doc(db, 'solicitacoes', solicitacao.id), {
+    status: 'recusada',
+    motivoRecusa: motivo,
+    decididoPorUid: ctx.uid,
+    decididoPorNome: ctx.nome,
+    decididoEm: serverTimestamp()
+  })
+  await registrarLog(
+    ctx, 'solicitacao-recusada',
+    `${solicitacao.setor || 'setor'} · ${motivo}`,
+    'solicitacoes', solicitacao.id
+  )
 }

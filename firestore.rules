@@ -19,6 +19,10 @@ service cloud.firestore {
     }
     function ehAdm() { return funcao() == 'adm'; }
     function ehFarmaceutico() { return funcao() == 'adm' || funcao() == 'farmaceutico'; }
+    // Quem opera o estoque de fato. A enfermagem não entra aqui.
+    function operacional() {
+      return funcao() == 'adm' || funcao() == 'farmaceutico' || funcao() == 'auxiliar';
+    }
 
     // Perfis de usuário
     match /usuarios/{uid} {
@@ -41,30 +45,30 @@ service cloud.firestore {
 
     // Locais de estoque
     match /estoques/{id} {
-      allow read: if ativo();
+      allow read: if operacional();
       allow write: if ehAdm();
     }
 
     // Catálogo de itens
     match /itens/{id} {
-      allow read: if ativo();
+      allow read: if operacional();
       allow write: if ehFarmaceutico();
     }
 
     // Saldos e lotes: gravados pelo app durante os lançamentos
     match /saldos/{id} {
-      allow read: if ativo();
-      allow write: if ativo();
+      allow read: if operacional();
+      allow write: if operacional();
     }
     match /lotes/{id} {
-      allow read: if ativo();
-      allow write: if ativo();
+      allow read: if operacional();
+      allow write: if operacional();
     }
 
     // Movimentações: imutáveis depois de gravadas
     match /movimentos/{id} {
-      allow read:   if ativo();
-      allow create: if ativo();
+      allow read:   if operacional();
+      allow create: if operacional();
       allow update: if false;
       allow delete: if ehAdm();
     }
@@ -73,6 +77,24 @@ service cloud.firestore {
     match /profissionais/{id} {
       allow read: if ativo();
       allow write: if ehFarmaceutico();
+    }
+
+    // Espelho enxuto do catálogo: é o que a enfermagem enxerga.
+    // Sem preço, sem saldo — só o necessário para escolher o item.
+    match /catalogoPublico/{id} {
+      allow read: if ativo();
+      allow write: if ehFarmaceutico();
+    }
+
+    // Solicitações vindas do app de plantão da enfermagem.
+    match /solicitacoes/{id} {
+      // Qualquer pessoa cadastrada cria, mas sempre como pendente e em seu próprio nome.
+      allow create: if ativo()
+                    && request.resource.data.status == 'pendente'
+                    && request.resource.data.solicitanteUid == request.auth.uid;
+      // Só a farmácia lê e decide.
+      allow read, update: if operacional();
+      allow delete: if ehAdm();
     }
 
     // Auditoria: somente farmacêutico e adm leem

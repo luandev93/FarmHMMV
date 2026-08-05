@@ -104,10 +104,30 @@ export function vibrar (ms = 12) {
 export const NOMES_FUNCAO = {
   adm: 'Administrador',
   farmaceutico: 'Farmacêutico',
-  auxiliar: 'Auxiliar'
+  auxiliar: 'Auxiliar',
+  enfermagem: 'Enfermagem (solicita pelo app de plantão)'
 }
 
-export const VERSAO = '1.3'
+/** Quem opera o estoque. A enfermagem fica de fora: ela só cria solicitações. */
+export const FUNCOES_OPERACIONAIS = ['adm', 'farmaceutico', 'auxiliar']
+
+export const SITUACOES_SOLICITACAO = {
+  pendente: 'Aguardando a farmácia',
+  atendida: 'Atendida',
+  parcial: 'Atendida em parte',
+  recusada: 'Recusada'
+}
+
+export const MOTIVOS_RECUSA = [
+  'Item sem saldo na farmácia',
+  'Prescrição não localizada',
+  'Quantidade acima do necessário',
+  'Solicitação duplicada',
+  'Dados do paciente incompletos',
+  'Outro'
+]
+
+export const VERSAO = '1.4'
 
 /**
  * Preço usado para valorar estoque e pedido: apenas o preço de contrato,

@@ -15,6 +15,7 @@ import Movimentacoes from './screens/Movimentacoes'
 import Usuarios from './screens/Usuarios'
 import Locais from './screens/Locais'
 import Profissionais from './screens/Profissionais'
+import Solicitacoes from './screens/Solicitacoes'
 import Config from './screens/Config'
 import Perfil from './screens/Perfil'
 
@@ -27,6 +28,7 @@ const TELAS = {
 
   inventario: { titulo: 'Inventário', subtitulo: 'Contagem que substitui o saldo', comp: Inventario, exige: 'farmaceutico' },
   catalogo: { titulo: 'Catálogo', subtitulo: 'Itens, categorias e estoque mínimo', comp: Catalogo, exige: 'farmaceutico' },
+  solicitacoes: { titulo: 'Solicitações', subtitulo: 'Pedidos da enfermagem', comp: Solicitacoes },
   movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
   auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
   locais: { titulo: 'Locais de estoque', subtitulo: 'Regras de cada setor', comp: Locais },
@@ -59,6 +61,9 @@ function Roteador () {
   }
   if (perfil.ativo === false) {
     return <AcessoSuspenso />
+  }
+  if (perfil.funcao === 'enfermagem') {
+    return <SomenteEnfermagem />
   }
 
   return (
@@ -146,13 +151,28 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
   const vencidos = dados.vencendo.filter(l => l.dias < 0)
 
   const opcoes = [
-    'movimentacoes', 'inventario', 'catalogo', 'profissionais',
+    'solicitacoes', 'movimentacoes', 'inventario', 'catalogo', 'profissionais',
     'auditoria', 'locais', 'usuarios', 'config', 'perfil'
   ]
     .filter(podeVer)
 
   return (
     <>
+      {dados.solicitacoesPendentes > 0 && (
+        <button
+          className="cartao bloco"
+          style={{ display: 'flex', gap: 10, alignItems: 'center', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+          onClick={() => aoAbrir('solicitacoes')}
+        >
+          <Icone nome="pedido" tamanho={22} />
+          <div style={{ fontSize: 14 }}>
+            <b>{dados.solicitacoesPendentes} solicitação(ões) da enfermagem</b>
+            <div className="dica">aguardando a farmácia</div>
+          </div>
+          <Icone nome="seta" tamanho={18} />
+        </button>
+      )}
+
       {(dados.abaixoDoMinimo.length > 0 || dados.vencendo.length > 0) && (
         <div className="indicadores bloco">
           <button
@@ -194,7 +214,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
         {opcoes.map(chave => (
           <button key={chave} className="menu-item" onClick={() => aoAbrir(chave)}>
             <Icone nome={{
-              movimentacoes: 'historico', inventario: 'inventario', catalogo: 'etiqueta',
+              solicitacoes: 'pedido', movimentacoes: 'historico', inventario: 'inventario', catalogo: 'etiqueta',
               profissionais: 'usuarios', auditoria: 'cadeado', locais: 'caixa',
               usuarios: 'usuarios', config: 'engrenagem', perfil: 'pessoa'
             }[chave]} />
@@ -229,6 +249,19 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
         versão {VERSAO}
       </p>
     </>
+  )
+}
+
+function SomenteEnfermagem () {
+  const { sair, perfil } = useAuth()
+  return (
+    <div className="conteudo" style={{ paddingTop: 60 }}>
+      <Vazio
+        titulo="Use o app de plantão"
+        texto={`${perfil.nome}, seu acesso serve para solicitar medicamentos pelo sistema de relatório da enfermagem. As solicitações chegam à farmácia por lá.`}
+        acao={<button className="btn secundario" onClick={sair}>Sair</button>}
+      />
+    </div>
   )
 }
 

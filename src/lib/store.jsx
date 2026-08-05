@@ -17,6 +17,7 @@ export function ProvedorDados ({ children }) {
   const [lotes, setLotes] = useState([])
   const [usuarios, setUsuarios] = useState([])
   const [profissionais, setProfissionais] = useState([])
+  const [solicitacoesPendentes, setPendentes] = useState(0)
   const [config, setConfig] = useState(CONFIG_PADRAO)
   const [prontos, setProntos] = useState({ itens: false, estoques: false, saldos: false })
 
@@ -51,6 +52,8 @@ export function ProvedorDados ({ children }) {
       onSnapshot(query(collection(db, 'lotes'), where('qtd', '>', 0)), s => {
         setLotes(s.docs.map(d => ({ id: d.id, ...d.data() })))
       }),
+      onSnapshot(query(collection(db, 'solicitacoes'), where('status', '==', 'pendente')),
+        s => setPendentes(s.size), () => setPendentes(0)),
       onSnapshot(collection(db, 'profissionais'), s => {
         setProfissionais(
           s.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -126,6 +129,7 @@ export function ProvedorDados ({ children }) {
       lotes,
       usuarios,
       profissionais,
+      solicitacoesPendentes,
       config,
       carregando: !(prontos.itens && prontos.estoques && prontos.saldos),
       saldoDe,
@@ -137,7 +141,7 @@ export function ProvedorDados ({ children }) {
       abaixoDoMinimo,
       vencendo
     }
-  }, [itens, estoques, saldos, lotes, usuarios, profissionais, config, prontos])
+  }, [itens, estoques, saldos, lotes, usuarios, profissionais, solicitacoesPendentes, config, prontos])
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
 }

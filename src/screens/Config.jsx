@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
-import { salvarConfig, semear } from '../lib/db'
+import { salvarConfig, semear, sincronizarCatalogoPublico } from '../lib/db'
 
 export default function Config () {
   const { perfil, usuario } = useAuth()
@@ -11,6 +11,7 @@ export default function Config () {
   const [f, setF] = useState(dados.config)
   const [salvando, setSalvando] = useState(false)
   const [carregando, setCarregando] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
 
   useEffect(() => { setF(dados.config) }, [dados.config])
 
@@ -57,6 +58,37 @@ export default function Config () {
             <option value="1.5">50% a mais</option>
           </select>
         </div>
+      </div>
+
+      <div className="cartao bloco">
+        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Integração com a enfermagem</h2>
+        <p className="dica" style={{ marginBottom: 12 }}>
+          As solicitações aceitas baixam deste local. O app de plantão enxerga apenas
+          código, descrição e se o item é controlado — nunca saldo nem preço.
+        </p>
+        <label className="rotulo" htmlFor="disp">Farmácia de dispensação</label>
+        <select
+          id="disp" className="campo" value={f.estoqueDispensacaoId || ''}
+          onChange={e => troca('estoqueDispensacaoId', e.target.value)}
+        >
+          <option value="">Não definida</option>
+          {dados.estoques.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+        </select>
+        <button
+          className="btn secundario" style={{ marginTop: 12 }}
+          disabled={sincronizando}
+          onClick={async () => {
+            setSincronizando(true)
+            try {
+              const n = await sincronizarCatalogoPublico(ctx)
+              avisar(`${n} itens disponíveis para a enfermagem.`, 'ok')
+            } catch (e) {
+              avisar('Falhou: ' + e.message, 'erro')
+            } finally {
+              setSincronizando(false)
+            }
+          }}
+        >{sincronizando ? 'Sincronizando…' : 'Sincronizar catálogo da enfermagem'}</button>
       </div>
 
       <div className="cartao bloco">
@@ -108,7 +140,8 @@ export default function Config () {
               fatorSeguranca: Number(f.fatorSeguranca) || 1.2,
               diasAlertaValidade: numero(f.diasAlertaValidade) || 90,
               permitirSaldoNegativo: Boolean(f.permitirSaldoNegativo),
-              exigirMotivoSaida: Boolean(f.exigirMotivoSaida)
+              exigirMotivoSaida: Boolean(f.exigirMotivoSaida),
+              estoqueDispensacaoId: f.estoqueDispensacaoId || ''
             }, ctx)
             avisar('Configurações salvas.', 'ok')
           } catch (e) {
