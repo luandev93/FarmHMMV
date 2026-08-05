@@ -125,7 +125,8 @@ function DetalheSolicitacao ({ solicitacao, dispensacao, aoAtender, aoRecusar, a
   const [linhas, setLinhas] = useState(
     (solicitacao.linhas || []).map(l => ({
       ...l,
-      qtdAtendida: l.qtdAtendida ?? l.qtdSolicitada
+      // A solicitação chega com zero; o padrão é liberar tudo o que foi pedido.
+      qtdAtendida: l.qtdAtendida || l.qtdSolicitada
     }))
   )
   const [observacao, setObservacao] = useState('')
@@ -168,6 +169,7 @@ function DetalheSolicitacao ({ solicitacao, dispensacao, aoAtender, aoRecusar, a
           <button className="btn secundario perigo" onClick={() => setRecusando(true)}>Recusar</button>
           <button
             className="btn" disabled={ocupado || !dispensacao}
+            title={dispensacao ? '' : 'Defina a farmácia de dispensação em Configurações'}
             onClick={() => executar(() => aoAtender(linhas, observacao))}
           >{ocupado ? 'Baixando…' : 'Atender e baixar'}</button>
         </>
@@ -249,7 +251,7 @@ function DetalheSolicitacao ({ solicitacao, dispensacao, aoAtender, aoRecusar, a
                     inputMode="numeric" value={l.qtdAtendida}
                     onChange={e => trocar(i, e.target.value)}
                   />
-                  <button className="btn secundario pequeno" onClick={() => trocar(i, '0')}>não enviar</button>
+                  <span className="dica">{l.unidade?.toLowerCase()}</span>
                   {liberar > pedido && (
                     <span className="etq alerta">acima do pedido</span>
                   )}
@@ -259,6 +261,13 @@ function DetalheSolicitacao ({ solicitacao, dispensacao, aoAtender, aoRecusar, a
           )
         })}
       </div>
+
+      {!decidida && !dispensacao && (
+        <div className="aviso-caixa" style={{ marginTop: 16 }}>
+          Para liberar, primeiro escolha a <b>farmácia de dispensação</b> em
+          Mais › Configurações. É de lá que a baixa vai sair.
+        </div>
+      )}
 
       {!decidida && !recusando && (
         <div style={{ marginTop: 16 }}>

@@ -118,7 +118,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-top: 1px solid var(--borda);
   padding-bottom: var(--seguro-b);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 .nav button {
   border: 0;
@@ -135,7 +135,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
   position: relative;
 }
-.nav button svg { width: 22px; height: 22px; }
+.nav button svg { width: 21px; height: 21px; }
+.nav .marcador {
+  position: absolute;
+  top: 8px;
+  left: calc(50% + 8px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--saida);
+  color: var(--branco);
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
 .nav button[aria-current="page"] { color: var(--azul-600); }
 .nav button[aria-current="page"]::before {
   content: "";

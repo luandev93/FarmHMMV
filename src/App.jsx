@@ -28,7 +28,7 @@ const TELAS = {
 
   inventario: { titulo: 'Inventário', subtitulo: 'Contagem que substitui o saldo', comp: Inventario, exige: 'farmaceutico' },
   catalogo: { titulo: 'Catálogo', subtitulo: 'Itens, categorias e estoque mínimo', comp: Catalogo, exige: 'farmaceutico' },
-  solicitacoes: { titulo: 'Solicitações', subtitulo: 'Pedidos da enfermagem', comp: Solicitacoes },
+  solicitacoes: { titulo: 'Pedidos', subtitulo: 'Solicitações da enfermagem', icone: 'solicitacoes', comp: Solicitacoes },
   movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
   auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
   locais: { titulo: 'Locais de estoque', subtitulo: 'Regras de cada setor', comp: Locais },
@@ -38,7 +38,7 @@ const TELAS = {
   perfil: { titulo: 'Meu perfil', subtitulo: '', comp: Perfil }
 }
 
-const BARRA = ['movimentar', 'estoque', 'pedido', 'mais']
+const BARRA = ['movimentar', 'estoque', 'pedido', 'solicitacoes', 'mais']
 
 export default function App () {
   return (
@@ -132,6 +132,9 @@ function Interface () {
           >
             <Icone nome={TELAS[chave].icone} />
             {TELAS[chave].titulo}
+            {chave === 'solicitacoes' && dados.solicitacoesPendentes > 0 && (
+              <span className="marcador">{dados.solicitacoesPendentes}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -151,7 +154,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
   const vencidos = dados.vencendo.filter(l => l.dias < 0)
 
   const opcoes = [
-    'solicitacoes', 'movimentacoes', 'inventario', 'catalogo', 'profissionais',
+    'movimentacoes', 'inventario', 'catalogo', 'profissionais',
     'auditoria', 'locais', 'usuarios', 'config', 'perfil'
   ]
     .filter(podeVer)
