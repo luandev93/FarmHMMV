@@ -5,7 +5,10 @@ import { useAuth, traduzirErro } from '../lib/auth'
 import { useDados } from '../lib/store'
 import { salvarPerfilUsuario, excluirPerfilUsuario } from '../lib/db'
 import { comAppParalelo, auth } from '../firebase'
-import { NOMES_FUNCAO, dataBR, diasParaAniversario, idade } from '../lib/utils'
+import {
+  CARGOS_ENFERMAGEM, NOMES_FUNCAO, SETORES_ENFERMAGEM,
+  dataBR, diasParaAniversario, idade
+} from '../lib/utils'
 
 export default function Usuarios () {
   const { perfil, usuario, ehAdm } = useAuth()
@@ -18,10 +21,15 @@ export default function Usuarios () {
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
 
-  const lista = useMemo(
-    () => [...dados.usuarios].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR')),
-    [dados.usuarios]
-  )
+  const [area, setArea] = useState('')
+
+  const lista = useMemo(() => {
+    const todos = [...dados.usuarios].sort((a, b) =>
+      String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+    if (area === 'enfermagem') return todos.filter(u => u.enfermagem?.ativo)
+    if (area === 'farmacia') return todos.filter(u => ['adm', 'farmaceutico', 'auxiliar'].includes(u.funcao))
+    return todos
+  }, [dados.usuarios, area])
 
   const aniversariantes = lista
     .map(u => ({ ...u, faltam: diasParaAniversario(u.nascimento) }))
@@ -49,6 +57,12 @@ export default function Usuarios () {
         </div>
       )}
 
+      <div className="pilulas">
+        <button className="pilula" aria-pressed={!area} onClick={() => setArea('')}>Todos</button>
+        <button className="pilula" aria-pressed={area === 'farmacia'} onClick={() => setArea('farmacia')}>Farmácia</button>
+        <button className="pilula" aria-pressed={area === 'enfermagem'} onClick={() => setArea('enfermagem')}>Enfermagem</button>
+      </div>
+
       {ehAdm && (
         <button className="btn bloco-largo bloco" onClick={() => setCriando(true)}>
           <Icone nome="entrada" tamanho={18} /> Cadastrar pessoa
@@ -69,6 +83,9 @@ export default function Usuarios () {
                 <span className="etq">{NOMES_FUNCAO[u.funcao] || u.funcao}</span>
                 <span>{u.email}</span>
                 {u.nascimento && <span>{dataBR(u.nascimento)} · {idade(u.nascimento)} anos</span>}
+                {u.enfermagem?.ativo && (
+                  <span className="etq ok">{u.enfermagem.cargo}</span>
+                )}
                 {u.ativo === false && <span className="etq alerta">acesso suspenso</span>}
                 {u.id === usuario.uid && <span className="etq ok">você</span>}
               </div>
@@ -92,7 +109,15 @@ export default function Usuarios () {
                 telefone: d.telefone || '',
                 registro: d.registro || '',
                 ativo: true,
-                criadoPor: perfil.nome
+                criadoPor: perfil.nome,
+                enfermagem: d.naEnfermagem
+                  ? {
+                      ativo: true,
+                      cargo: d.cargo,
+                      coren: d.coren?.trim() || '',
+                      setorPadrao: d.setorPadrao || ''
+                    }
+                  : { ativo: false, cargo: '', coren: '', setorPadrao: '' }
               }, ctx)
             })
             setCriando(false)
@@ -144,7 +169,8 @@ export default function Usuarios () {
 function FormularioNovo ({ aoCriar, aoFechar }) {
   const [f, setF] = useState({
     nome: '', email: '', senha: '', funcao: 'auxiliar',
-    nascimento: '', telefone: '', registro: ''
+    nascimento: '', telefone: '', registro: '',
+    naEnfermagem: false, cargo: 'Técnico(a) de Enfermagem', coren: '', setorPadrao: ''
   })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -214,6 +240,47 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
           <label className="rotulo">Registro profissional (CRF, COREN…)</label>
           <input className="campo" value={f.registro} onChange={e => troca('registro', e.target.value)} />
         </div>
+
+        <div style={{ borderTop: '1px solid var(--borda)', paddingTop: 14, display: 'grid', gap: 12 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+            <input
+              type="checkbox" checked={f.naEnfermagem}
+              onChange={e => troca('naEnfermagem', e.target.checked)}
+              style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+            />
+            <span>
+              Faz parte da equipe de enfermagem
+              <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                Libera o acesso ao app de relatório de plantão.
+              </small>
+            </span>
+          </label>
+
+          {f.naEnfermagem && (
+            <>
+              <div>
+                <label className="rotulo">Cargo na enfermagem</label>
+                <select className="campo" value={f.cargo} onChange={e => troca('cargo', e.target.value)}>
+                  {CARGOS_ENFERMAGEM.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="linha-campos">
+                <div>
+                  <label className="rotulo">COREN</label>
+                  <input className="campo" value={f.coren} onChange={e => troca('coren', e.target.value)} />
+                </div>
+                <div>
+                  <label className="rotulo">Setor padrão</label>
+                  <select className="campo" value={f.setorPadrao} onChange={e => troca('setorPadrao', e.target.value)}>
+                    <option value="">—</option>
+                    {SETORES_ENFERMAGEM.map(x => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         {erro && <div className="erro-caixa">{erro}</div>}
       </div>
     </Painel>
@@ -224,7 +291,11 @@ function FormularioEdicao ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnv
   const [f, setF] = useState({
     nome: pessoa.nome || '', funcao: pessoa.funcao || 'auxiliar',
     nascimento: pessoa.nascimento || '', telefone: pessoa.telefone || '',
-    registro: pessoa.registro || '', ativo: pessoa.ativo !== false
+    registro: pessoa.registro || '', ativo: pessoa.ativo !== false,
+    naEnfermagem: Boolean(pessoa.enfermagem?.ativo),
+    cargo: pessoa.enfermagem?.cargo || 'Técnico(a) de Enfermagem',
+    coren: pessoa.enfermagem?.coren || '',
+    setorPadrao: pessoa.enfermagem?.setorPadrao || ''
   })
   const [salvando, setSalvando] = useState(false)
   const troca = (c, v) => setF(a => ({ ...a, [c]: v }))
@@ -240,7 +311,17 @@ function FormularioEdicao ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnv
           <button
             className="btn"
             disabled={salvando}
-            onClick={async () => { setSalvando(true); await aoSalvar(f); setSalvando(false) }}
+            onClick={async () => {
+              setSalvando(true)
+              const { naEnfermagem, cargo, coren, setorPadrao, ...resto } = f
+              await aoSalvar({
+                ...resto,
+                enfermagem: naEnfermagem
+                  ? { ativo: true, cargo, coren: coren.trim(), setorPadrao }
+                  : { ativo: false, cargo: '', coren: '', setorPadrao: '' }
+              })
+              setSalvando(false)
+            }}
           >
             {salvando ? 'Salvando…' : 'Salvar'}
           </button>
@@ -278,6 +359,47 @@ function FormularioEdicao ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnv
           <label className="rotulo">Registro profissional</label>
           <input className="campo" value={f.registro} onChange={e => troca('registro', e.target.value)} />
         </div>
+
+        <div style={{ borderTop: '1px solid var(--borda)', paddingTop: 14, display: 'grid', gap: 12 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+            <input
+              type="checkbox" checked={f.naEnfermagem}
+              onChange={e => troca('naEnfermagem', e.target.checked)}
+              style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+            />
+            <span>
+              Faz parte da equipe de enfermagem
+              <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                Libera o acesso ao app de relatório de plantão.
+              </small>
+            </span>
+          </label>
+
+          {f.naEnfermagem && (
+            <>
+              <div>
+                <label className="rotulo">Cargo na enfermagem</label>
+                <select className="campo" value={f.cargo} onChange={e => troca('cargo', e.target.value)}>
+                  {CARGOS_ENFERMAGEM.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="linha-campos">
+                <div>
+                  <label className="rotulo">COREN</label>
+                  <input className="campo" value={f.coren} onChange={e => troca('coren', e.target.value)} />
+                </div>
+                <div>
+                  <label className="rotulo">Setor padrão</label>
+                  <select className="campo" value={f.setorPadrao} onChange={e => troca('setorPadrao', e.target.value)}>
+                    <option value="">—</option>
+                    {SETORES_ENFERMAGEM.map(x => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         {!souEu && (
           <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14.5 }}>
             <input

@@ -111,6 +111,20 @@ export const NOMES_FUNCAO = {
 /** Quem opera o estoque. A enfermagem fica de fora: ela só cria solicitações. */
 export const FUNCOES_OPERACIONAIS = ['adm', 'farmaceutico', 'auxiliar']
 
+export const CARGOS_ENFERMAGEM = [
+  'Admin',
+  'Coordenador(a) de Enfermagem',
+  'Enfermeiro(a)',
+  'Técnico(a) de Enfermagem'
+]
+
+export const SETORES_ENFERMAGEM = [
+  'Pronto-Socorro',
+  'Clínica Médica',
+  'Sala de Parto',
+  'UTI'
+]
+
 export const SITUACOES_SOLICITACAO = {
   pendente: 'Aguardando a farmácia',
   atendida: 'Atendida',
@@ -127,7 +141,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.4'
+export const VERSAO = '1.5'
 
 /**
  * Preço usado para valorar estoque e pedido: apenas o preço de contrato,
