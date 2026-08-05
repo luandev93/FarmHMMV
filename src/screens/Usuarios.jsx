@@ -6,8 +6,8 @@ import { useDados } from '../lib/store'
 import { salvarPerfilUsuario, excluirPerfilUsuario } from '../lib/db'
 import { comAppParalelo, auth } from '../firebase'
 import {
-  CARGOS_ENFERMAGEM, NOMES_FUNCAO, SETORES_ENFERMAGEM,
-  dataBR, diasParaAniversario, idade
+  CARGOS_ENFERMAGEM, DOMINIO_INTERNO, NOMES_FUNCAO, SETORES_ENFERMAGEM,
+  dataBR, diasParaAniversario, idade, sugerirUsuario
 } from '../lib/utils'
 
 export default function Usuarios () {
@@ -168,7 +168,7 @@ export default function Usuarios () {
 
 function FormularioNovo ({ aoCriar, aoFechar }) {
   const [f, setF] = useState({
-    nome: '', email: '', senha: '', funcao: 'auxiliar',
+    nome: '', email: '', senha: '', funcao: 'auxiliar', usarEmailProprio: false,
     nascimento: '', telefone: '', registro: '',
     naEnfermagem: false, cargo: 'Técnico(a) de Enfermagem', coren: '', setorPadrao: ''
   })
@@ -178,12 +178,15 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
 
   async function enviar () {
     if (!f.nome.trim()) return setErro('Informe o nome.')
-    if (!f.email.trim()) return setErro('Informe o e-mail.')
+    if (!f.email.trim()) return setErro(f.usarEmailProprio ? 'Informe o e-mail.' : 'Informe o nome de usuário.')
     if (f.senha.length < 6) return setErro('A senha provisória precisa ter pelo menos 6 caracteres.')
     setSalvando(true)
     setErro('')
     try {
-      await aoCriar(f)
+      const email = f.usarEmailProprio
+        ? f.email.trim()
+        : `${f.email.trim()}@${DOMINIO_INTERNO}`
+      await aoCriar({ ...f, email })
     } catch (e) {
       setErro(traduzirErro(e))
     } finally {
@@ -208,11 +211,62 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
       <div className="campos">
         <div>
           <label className="rotulo">Nome completo</label>
-          <input className="campo" value={f.nome} onChange={e => troca('nome', e.target.value)} autoCapitalize="words" />
+          <input
+            className="campo" value={f.nome} autoCapitalize="words"
+            onChange={e => {
+              const nome = e.target.value
+              // Enquanto o campo de acesso não for tocado, ele acompanha o nome.
+              setF(a => ({
+                ...a,
+                nome,
+                email: a.usarEmailProprio || a.emailTocado ? a.email : sugerirUsuario(nome)
+              }))
+            }}
+          />
         </div>
+
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+          <input
+            type="checkbox" checked={f.usarEmailProprio}
+            onChange={e => setF(a => ({
+              ...a,
+              usarEmailProprio: e.target.checked,
+              email: e.target.checked ? '' : sugerirUsuario(a.nome)
+            }))}
+            style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+          />
+          <span>
+            Esta pessoa tem e-mail
+            <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+              Com e-mail de verdade ela recupera a senha sozinha. Sem, quem redefine é você.
+            </small>
+          </span>
+        </label>
+
         <div>
-          <label className="rotulo">E-mail</label>
-          <input className="campo" type="email" value={f.email} onChange={e => troca('email', e.target.value)} autoCapitalize="none" />
+          <label className="rotulo">{f.usarEmailProprio ? 'E-mail' : 'Nome de usuário'}</label>
+          {f.usarEmailProprio ? (
+            <input
+              className="campo" type="email" value={f.email} autoCapitalize="none"
+              onChange={e => setF(a => ({ ...a, email: e.target.value, emailTocado: true }))}
+              placeholder="pessoa@exemplo.com"
+            />
+          ) : (
+            <>
+              <input
+                className="campo" value={f.email} autoCapitalize="none"
+                onChange={e => setF(a => ({
+                  ...a,
+                  email: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''),
+                  emailTocado: true
+                }))}
+                placeholder="maria.silva"
+              />
+              <p className="dica" style={{ marginTop: 5 }}>
+                Ela vai entrar com <b>{f.email || 'usuario'}@{DOMINIO_INTERNO}</b>
+              </p>
+            </>
+          )}
         </div>
         <div>
           <label className="rotulo">Senha provisória</label>

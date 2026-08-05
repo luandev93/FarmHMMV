@@ -141,7 +141,21 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.5'
+export const VERSAO = '1.6'
+
+/** Domínio interno para quem não tem e-mail. Serve só como identificador de login. */
+export const DOMINIO_INTERNO = 'hmmv.local'
+
+/** Transforma o nome da pessoa num nome de usuário limpo. */
+export function sugerirUsuario (nome) {
+  const partes = String(nome || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z\s]/g, '')
+    .split(/\s+/).filter(Boolean)
+  if (!partes.length) return ''
+  if (partes.length === 1) return partes[0]
+  return `${partes[0]}.${partes[partes.length - 1]}`
+}
 
 /**
  * Preço usado para valorar estoque e pedido: apenas o preço de contrato,
