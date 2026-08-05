@@ -155,7 +155,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.9'
+export const VERSAO = '1.10'
 
 /** Domínio interno para quem não tem e-mail. Serve só como identificador de login. */
 export const DOMINIO_INTERNO = 'hmmv.local'
@@ -227,6 +227,147 @@ export const GRUPOS_ATC = {
   R: 'Aparelho Respiratório',
   V: 'Vários'
 }
+
+/* =========================================================
+   Formas farmacêuticas
+   Cada uma com a abreviação usada na prescrição e no rótulo.
+   ========================================================= */
+
+export const FORMAS_FARMACEUTICAS = [
+  // --- Sólidas: comprimidos
+  { g: 'Sólidas — comprimidos', n: 'Comprimido', s: 'CP' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido revestido', s: 'CP REV' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido efervescente', s: 'CP EFERV' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido mastigável', s: 'CP MAST' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido sublingual', s: 'CP SL' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido orodispersível', s: 'CP ODT' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido de liberação prolongada', s: 'CP LP' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido gastrorresistente', s: 'CP GR' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido para solução', s: 'CP SOL' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido para suspensão', s: 'CP SUSP' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido vaginal', s: 'CP VAG' },
+  { g: 'Sólidas — comprimidos', n: 'Comprimido multicamadas', s: 'CP MC' },
+  { g: 'Sólidas — comprimidos', n: 'Drágea', s: 'DRG' },
+
+  // --- Sólidas: cápsulas
+  { g: 'Sólidas — cápsulas', n: 'Cápsula dura', s: 'CAP' },
+  { g: 'Sólidas — cápsulas', n: 'Cápsula mole', s: 'CAP MOLE' },
+  { g: 'Sólidas — cápsulas', n: 'Cápsula de liberação prolongada', s: 'CAP LP' },
+  { g: 'Sólidas — cápsulas', n: 'Cápsula gastrorresistente', s: 'CAP GR' },
+  { g: 'Sólidas — cápsulas', n: 'Cápsula vaginal', s: 'CAP VAG' },
+
+  // --- Sólidas: pós e granulados
+  { g: 'Sólidas — pós e granulados', n: 'Pó', s: 'PÓ' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó para solução oral', s: 'PÓ SOL OR' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó para solução injetável', s: 'PÓ SOL INJ' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó para suspensão oral', s: 'PÓ SUSP OR' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó para suspensão injetável', s: 'PÓ SUSP INJ' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó liofilizado injetável', s: 'PÓ LIOF' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó inalatório', s: 'PÓ INAL' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó efervescente', s: 'PÓ EFERV' },
+  { g: 'Sólidas — pós e granulados', n: 'Pó tópico', s: 'PÓ TOP' },
+  { g: 'Sólidas — pós e granulados', n: 'Granulado', s: 'GRAN' },
+  { g: 'Sólidas — pós e granulados', n: 'Granulado efervescente', s: 'GRAN EFERV' },
+  { g: 'Sólidas — pós e granulados', n: 'Granulado revestido', s: 'GRAN REV' },
+  { g: 'Sólidas — pós e granulados', n: 'Granulado de liberação prolongada', s: 'GRAN LP' },
+  { g: 'Sólidas — pós e granulados', n: 'Granulado gastrorresistente', s: 'GRAN GR' },
+
+  // --- Sólidas: bucais, moldadas e transdérmicas
+  { g: 'Sólidas — outras', n: 'Pastilha', s: 'PAST' },
+  { g: 'Sólidas — outras', n: 'Goma de mascar medicinal', s: 'GOMA' },
+  { g: 'Sólidas — outras', n: 'Disco oral', s: 'DISCO' },
+  { g: 'Sólidas — outras', n: 'Filme orodispersível', s: 'FILME ODT' },
+  { g: 'Sólidas — outras', n: 'Filme polimérico', s: 'FILME' },
+  { g: 'Sólidas — outras', n: 'Supositório', s: 'SUP' },
+  { g: 'Sólidas — outras', n: 'Óvulo vaginal', s: 'OV' },
+  { g: 'Sólidas — outras', n: 'Bastão', s: 'BAST' },
+  { g: 'Sólidas — outras', n: 'Implante subcutâneo', s: 'IMPL' },
+  { g: 'Sólidas — outras', n: 'Adesivo transdérmico', s: 'ADES TD' },
+
+  // --- Líquidas: soluções
+  { g: 'Líquidas — soluções', n: 'Solução oral', s: 'SOL OR' },
+  { g: 'Líquidas — soluções', n: 'Solução injetável', s: 'SOL INJ' },
+  { g: 'Líquidas — soluções', n: 'Solução oftálmica (colírio)', s: 'COL' },
+  { g: 'Líquidas — soluções', n: 'Solução nasal', s: 'SOL NAS' },
+  { g: 'Líquidas — soluções', n: 'Solução otológica', s: 'SOL OT' },
+  { g: 'Líquidas — soluções', n: 'Solução tópica', s: 'SOL TOP' },
+  { g: 'Líquidas — soluções', n: 'Solução retal (enema)', s: 'ENEMA' },
+  { g: 'Líquidas — soluções', n: 'Solução bucal / gargarejo', s: 'SOL BUC' },
+  { g: 'Líquidas — soluções', n: 'Solução para irrigação', s: 'SOL IRRIG' },
+  { g: 'Líquidas — soluções', n: 'Solução para diálise', s: 'SOL DIAL' },
+
+  // --- Líquidas: suspensões e emulsões
+  { g: 'Líquidas — suspensões e emulsões', n: 'Suspensão oral', s: 'SUSP OR' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Suspensão injetável', s: 'SUSP INJ' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Suspensão oftálmica', s: 'SUSP OFT' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Suspensão otológica', s: 'SUSP OT' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Suspensão nasal', s: 'SUSP NAS' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Suspensão tópica', s: 'SUSP TOP' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Emulsão oral', s: 'EMUL OR' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Emulsão injetável', s: 'EMUL INJ' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Emulsão tópica', s: 'EMUL TOP' },
+  { g: 'Líquidas — suspensões e emulsões', n: 'Emulsão para infusão', s: 'EMUL INF' },
+
+  // --- Líquidas: extrativas e outras
+  { g: 'Líquidas — outras', n: 'Xarope', s: 'XPE' },
+  { g: 'Líquidas — outras', n: 'Elixir', s: 'ELIX' },
+  { g: 'Líquidas — outras', n: 'Solução em gotas oral', s: 'GTS OR' },
+  { g: 'Líquidas — outras', n: 'Solução em gotas otológica', s: 'GTS OT' },
+  { g: 'Líquidas — outras', n: 'Solução em gotas nasal', s: 'GTS NAS' },
+  { g: 'Líquidas — outras', n: 'Tintura', s: 'TINT' },
+  { g: 'Líquidas — outras', n: 'Extrato fluido', s: 'EXT FL' },
+  { g: 'Líquidas — outras', n: 'Colutório', s: 'COLUT' },
+  { g: 'Líquidas — outras', n: 'Linimento', s: 'LINIM' },
+  { g: 'Líquidas — outras', n: 'Xampu medicamentoso', s: 'XAMPU' },
+  { g: 'Líquidas — outras', n: 'Sabonete líquido medicamentoso', s: 'SAB LIQ' },
+  { g: 'Líquidas — outras', n: 'Flaconete', s: 'FLAC' },
+  { g: 'Líquidas — outras', n: 'Poção', s: 'POÇÃO' },
+
+  // --- Semissólidas
+  { g: 'Semissólidas', n: 'Pomada dermatológica', s: 'POM' },
+  { g: 'Semissólidas', n: 'Pomada oftálmica', s: 'POM OFT' },
+  { g: 'Semissólidas', n: 'Pomada vaginal', s: 'POM VAG' },
+  { g: 'Semissólidas', n: 'Pomada retal', s: 'POM RET' },
+  { g: 'Semissólidas', n: 'Creme dermatológico', s: 'CR' },
+  { g: 'Semissólidas', n: 'Creme vaginal', s: 'CR VAG' },
+  { g: 'Semissólidas', n: 'Creme retal', s: 'CR RET' },
+  { g: 'Semissólidas', n: 'Gel dermatológico', s: 'GEL' },
+  { g: 'Semissólidas', n: 'Hidrogel', s: 'HIDROGEL' },
+  { g: 'Semissólidas', n: 'Gel oftálmico', s: 'GEL OFT' },
+  { g: 'Semissólidas', n: 'Gel oral (orabase)', s: 'GEL OR' },
+  { g: 'Semissólidas', n: 'Gel vaginal', s: 'GEL VAG' },
+  { g: 'Semissólidas', n: 'Pasta dermatológica', s: 'PASTA' },
+  { g: 'Semissólidas', n: 'Pasta oral', s: 'PASTA OR' },
+  { g: 'Semissólidas', n: 'Emplastro', s: 'EMPL' },
+  { g: 'Semissólidas', n: 'Cataplasma', s: 'CATAP' },
+
+  // --- Gasosas, inalatórias e especiais
+  { g: 'Inalatórias e especiais', n: 'Aerossol pressurizado dosado', s: 'AER' },
+  { g: 'Inalatórias e especiais', n: 'Spray nasal', s: 'SPR NAS' },
+  { g: 'Inalatórias e especiais', n: 'Spray cutâneo', s: 'SPR CUT' },
+  { g: 'Inalatórias e especiais', n: 'Spray sublingual', s: 'SPR SL' },
+  { g: 'Inalatórias e especiais', n: 'Gás medicinal', s: 'GÁS' },
+  { g: 'Inalatórias e especiais', n: 'Espuma tópica', s: 'ESP TOP' },
+  { g: 'Inalatórias e especiais', n: 'Espuma vaginal', s: 'ESP VAG' },
+  { g: 'Inalatórias e especiais', n: 'Espuma retal', s: 'ESP RET' },
+  { g: 'Inalatórias e especiais', n: 'Dispositivo intrauterino', s: 'DIU' },
+  { g: 'Inalatórias e especiais', n: 'Anel vaginal', s: 'ANEL' },
+
+  { g: 'Outros', n: 'Não se aplica', s: '' }
+]
+
+/** Agrupadas para montar o select sem uma rolagem interminável. */
+export function formasPorGrupo () {
+  const mapa = new Map()
+  FORMAS_FARMACEUTICAS.forEach(f => {
+    if (!mapa.has(f.g)) mapa.set(f.g, [])
+    mapa.get(f.g).push(f)
+  })
+  return [...mapa.entries()]
+}
+
+export const siglaDaForma = nome =>
+  FORMAS_FARMACEUTICAS.find(f => f.n === nome)?.s || ''
 
 export const UNIDADES = [
   'AMPOLA', 'BISNAGA', 'BOLSA', 'CAIXA', 'CÁPSULA', 'COMPRIMIDO', 'FRASCO',

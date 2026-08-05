@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BotaoOlho, Icone, Painel, Vazio, ocultar, useValores } from '../components/ui'
 import { useDados } from '../lib/store'
 import { movimentosRecentes } from '../lib/db'
 import { useAuth } from '../lib/auth'
 import {
-  baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero, precoDe, semAcento
+  baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero, precoDe,
+  semAcento, siglaDaForma
 } from '../lib/utils'
 
 const FILTROS = [
@@ -23,10 +24,28 @@ export default function Estoque () {
   const [estoqueId, setEstoqueId] = useState('')  // vazio = todos
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('comSaldo')
+  const [forma, setForma] = useState('')
   const [detalhe, setDetalhe] = useState(null)
 
   const saldoDoContexto = item =>
     estoqueId ? dados.saldoDe(estoqueId, item.id) : dados.saldoTotal(item.id)
+
+  /* Só entram no filtro as apresentações que existem de fato no estoque:
+     lista de cem formas para escolher entre três é ruído. */
+  const formasComSaldo = useMemo(() => {
+    const conta = {}
+    dados.itens.forEach(i => {
+      const f = i.formaFarmaceutica
+      if (!f) return
+      const saldo = estoqueId ? dados.saldoDe(estoqueId, i.id) : dados.saldoTotal(i.id)
+      if (saldo > 0) conta[f] = (conta[f] || 0) + 1
+    })
+    return Object.entries(conta).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+  }, [dados.itens, dados.saldos, estoqueId])
+
+  useEffect(() => {
+    if (forma && !formasComSaldo.some(([f]) => f === forma)) setForma('')
+  }, [formasComSaldo, forma])
 
   const lista = useMemo(() => {
     const termo = semAcento(busca).trim()
@@ -34,6 +53,7 @@ export default function Estoque () {
 
     return dados.itens
       .filter(i => {
+        if (forma && i.formaFarmaceutica !== forma) return false
         if (termo && !semAcento(
           [i.descricao, i.principioAtivo, i.codigo, i.grupoFarmacologico].join(' ')
         ).includes(termo)) return false
@@ -55,7 +75,7 @@ export default function Estoque () {
         return true
       })
       .sort((a, b) => saldoDoContexto(b) - saldoDoContexto(a) || a.descricao.localeCompare(b.descricao))
-  }, [dados, busca, filtro, estoqueId])
+  }, [dados, busca, filtro, estoqueId, forma])
 
   // O valor só é calculado para quem pode vê-lo.
   const valorTotal = useMemo(
@@ -71,7 +91,7 @@ export default function Estoque () {
     const comValor = ehFarmaceutico
     const cabecalho = [
       'Código', 'Descrição', 'Tipo', 'Grupo ATC', 'Grupo farmacológico', 'Controle',
-      'Unidade', 'Saldo', 'Estoque mínimo', 'Local'
+      'Unidade', 'Forma farmacêutica', 'Saldo', 'Estoque mínimo', 'Local'
     ]
     if (comValor) cabecalho.push('Preço de contrato', 'Valor em estoque')
     const linhas = [cabecalho]
@@ -81,7 +101,7 @@ export default function Estoque () {
       const local = estoqueId ? dados.estoques.find(e => e.id === estoqueId)?.nome : 'Todos os locais'
       const linha = [
         i.codigo, i.descricao, i.tipo, i.grupoATC, i.grupoFarmacologico, i.controlado,
-        i.unidade, saldo, i.estoqueMinimo || 0, local
+        i.unidade, i.formaFarmaceutica || '', saldo, i.estoqueMinimo || 0, local
       ]
       if (comValor) {
         const preco = precoDe(i)
@@ -110,6 +130,19 @@ export default function Estoque () {
           placeholder="Buscar no estoque" type="search" enterKeyHint="search"
         />
       </div>
+
+      {formasComSaldo.length > 1 && (
+        <div className="bloco">
+          <select className="campo" value={forma} onChange={e => setForma(e.target.value)}>
+            <option value="">Todas as apresentações</option>
+            {formasComSaldo.map(([f, n]) => (
+              <option key={f} value={f}>
+                {f}{siglaDaForma(f) ? ` (${siglaDaForma(f)})` : ''} · {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="pilulas">
         {FILTROS.map(f => (

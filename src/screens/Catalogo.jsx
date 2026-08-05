@@ -6,8 +6,8 @@ import {
   salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao, mesclarItens
 } from '../lib/db'
 import {
-  CLASSES_CONTROLE, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
-  baixarCSV, formatarNumero, semAcento
+  CLASSES_CONTROLE, FORMAS_FARMACEUTICAS, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
+  baixarCSV, formasPorGrupo, formatarNumero, semAcento, siglaDaForma
 } from '../lib/utils'
 
 const VAZIO = {
@@ -418,7 +418,31 @@ function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, aoMesclar, somen
           <div className="linha-campos">
             <div>
               <label className="rotulo">Forma farmacêutica</label>
-              <input className="campo" value={f.formaFarmaceutica} onChange={e => troca('formaFarmaceutica', e.target.value)} />
+              <select
+                className="campo" value={f.formaFarmaceutica}
+                onChange={e => troca('formaFarmaceutica', e.target.value)}
+              >
+                <option value="">Não informada</option>
+                {/* Preserva o que já estava gravado, mesmo fora da lista padrão. */}
+                {f.formaFarmaceutica &&
+                  !FORMAS_FARMACEUTICAS.some(x => x.n === f.formaFarmaceutica) && (
+                    <option value={f.formaFarmaceutica}>{f.formaFarmaceutica} (fora do padrão)</option>
+                  )}
+                {formasPorGrupo().map(([grupo, itens]) => (
+                  <optgroup key={grupo} label={grupo}>
+                    {itens.map(x => (
+                      <option key={x.n} value={x.n}>
+                        {x.n}{x.s ? ` — ${x.s}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {siglaDaForma(f.formaFarmaceutica) && (
+                <p className="dica" style={{ marginTop: 5 }}>
+                  Abreviação: <b>{siglaDaForma(f.formaFarmaceutica)}</b>
+                </p>
+              )}
             </div>
             <div>
               <label className="rotulo">Unidade de contagem</label>
