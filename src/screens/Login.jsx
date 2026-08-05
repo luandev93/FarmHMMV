@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { configurado } from '../firebase'
 import { useAuth, traduzirErro } from '../lib/auth'
 import { Icone } from '../components/ui'
+import { completarLogin } from '../lib/utils'
 
 export default function Login () {
   const { entrar, recuperarSenha } = useAuth()
@@ -34,9 +35,9 @@ export default function Login () {
     setOcupado(true)
     try {
       if (modo === 'entrar') {
-        await entrar(email, senha)
+        await entrar(completarLogin(email), senha)
       } else {
-        await recuperarSenha(email)
+        await recuperarSenha(completarLogin(email))
         setRecado('Se existir conta com esse e-mail, o link de redefinição já está a caminho.')
       }
     } catch (err) {
@@ -49,7 +50,7 @@ export default function Login () {
   const titulos = {
     entrar: {
       h: 'Controle de estoque',
-      p: 'O acesso é criado pelo administrador. Se ainda não tem conta, fale com ele.'
+      p: 'Entre com seu usuário ou e-mail.'
     },
     recuperar: {
       h: 'Recuperar a senha',
@@ -69,9 +70,9 @@ export default function Login () {
 
       <form onSubmit={enviar}>
         <input
-          className="campo" type="email" placeholder="E-mail" value={email}
+          className="campo" type="text" placeholder="Usuário ou e-mail" value={email}
           onChange={e => setEmail(e.target.value)}
-          autoCapitalize="none" autoComplete="email" inputMode="email" required
+          autoCapitalize="none" autoCorrect="off" autoComplete="username" required
         />
 
         {modo === 'entrar' && (

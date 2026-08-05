@@ -8,18 +8,18 @@ import { semAcento } from '../lib/utils'
  * Quem não estiver cadastrado ainda pode ser escrito à mão.
  */
 export default function BuscaProfissional ({ tipos, rotulo, escolhido, aoEscolher, aoLimpar }) {
-  const { profissionais } = useDados()
+  const { paraEscolha } = useDados()
   const [texto, setTexto] = useState('')
   const [aberto, setAberto] = useState(false)
   const caixa = useRef(null)
 
   const resultados = useMemo(() => {
     const busca = semAcento(texto).trim()
-    return profissionais
+    return paraEscolha
       .filter(p => p.ativo !== false && (!tipos || tipos.includes(p.tipo)))
       .filter(p => !busca || semAcento([p.nome, p.numero, p.conselho, p.especialidade].join(' ')).includes(busca))
       .slice(0, 25)
-  }, [profissionais, texto, tipos])
+  }, [paraEscolha, texto, tipos])
 
   const registro = p => [p.conselho, p.numero, p.uf].filter(Boolean).join(' ')
 
@@ -72,6 +72,7 @@ export default function BuscaProfissional ({ tipos, rotulo, escolhido, aoEscolhe
               <div className="meta">
                 {registro(p) && <span className="etq">{registro(p)}</span>}
                 {p.especialidade && <span>{p.especialidade}</span>}
+                {p.temAcesso && <span className="etq ok">equipe</span>}
               </div>
             </button>
           ))}

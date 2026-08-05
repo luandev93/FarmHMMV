@@ -32,20 +32,21 @@ export default function Profissionais () {
 
   const lista = useMemo(() => {
     const t = semAcento(busca).trim()
-    return dados.profissionais.filter(p => {
+    return dados.paraEscolha.filter(p => {
       if (tipo && p.tipo !== tipo) return false
       if (!t) return true
       return semAcento([p.nome, p.numero, p.conselho, p.especialidade].join(' ')).includes(t)
     })
-  }, [dados.profissionais, busca, tipo])
+  }, [dados.paraEscolha, busca, tipo])
 
   const registro = p => [p.conselho, p.numero, p.uf].filter(Boolean).join(' ')
 
   return (
     <>
       <p className="dica bloco">
-        Esta lista alimenta os campos de prescritor e responsável na tela de consumo.
-        Ninguém daqui recebe acesso ao sistema — para isso, use Pessoas.
+        Quem tem acesso ao sistema já aparece automaticamente nas escolhas de prescritor
+        e responsável. Cadastre aqui somente quem <b>não</b> tem login — os médicos
+        prescritores, principalmente.
       </p>
 
       <div className="bloco">
@@ -80,8 +81,8 @@ export default function Profissionais () {
           {lista.map(p => (
             <button
               key={p.id} className="linha-item"
-              onClick={() => ehFarmaceutico && setEditando(p)}
-              style={{ cursor: ehFarmaceutico ? 'pointer' : 'default' }}
+              onClick={() => ehFarmaceutico && !p.temAcesso && setEditando(p)}
+              style={{ cursor: ehFarmaceutico && !p.temAcesso ? 'pointer' : 'default' }}
             >
               <div className="corpo">
                 <div className="nome" style={{ opacity: p.ativo === false ? .5 : 1 }}>{p.nome}</div>
@@ -90,9 +91,10 @@ export default function Profissionais () {
                   {registro(p) && <span>{registro(p)}</span>}
                   {p.especialidade && <span>{p.especialidade}</span>}
                   {p.ativo === false && <span className="etq alerta">inativo</span>}
+                  {p.temAcesso && <span className="etq ok">tem acesso · edite em Pessoas</span>}
                 </div>
               </div>
-              {ehFarmaceutico && <Icone nome="seta" tamanho={18} />}
+              {ehFarmaceutico && !p.temAcesso && <Icone nome="seta" tamanho={18} />}
             </button>
           ))}
         </div>

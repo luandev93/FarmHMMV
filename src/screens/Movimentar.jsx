@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import { salvarLancamentos } from '../lib/db'
 import {
-  ACOES_ESTOQUE, FINALIDADES_CONSUMO, MOTIVOS_ENTRADA, MOTIVOS_DESCARTE,
+  ACOES_ESTOQUE, FINALIDADES_CONSUMO, MOTIVOS_ENTRADA, MOTIVOS_DESCARTE, MOTIVOS_DEVOLUCAO,
   cpfValido, dataBR, formatarNumero, idAleatorio, mascaraCPF, vibrar
 } from '../lib/utils'
 
@@ -15,11 +15,15 @@ const RASCUNHO = 'rascunho-movimentacao'
 const ICONES = {
   entrada: 'entrada',
   consumo: 'saida',
+  devolucao: 'volta',
   transferencia: 'transferencia',
   descarte: 'lixeira'
 }
 
-export default function Movimentar () {
+/* Tipos que somam ao estoque em vez de retirar. */
+const SOMA_AO_ESTOQUE = ['entrada', 'devolucao']
+
+export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
   const { perfil, usuario } = useAuth()
   const dados = useDados()
   const avisar = useAviso()
@@ -45,6 +49,7 @@ export default function Movimentar () {
 
   // Descarte
   const [loteEscolhido, setLoteEscolhido] = useState(null)
+  const [estornoDe, setEstornoDe] = useState('')
 
   const [linhas, setLinhas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(RASCUNHO) || '[]') } catch { return [] }
@@ -59,6 +64,23 @@ export default function Movimentar () {
   useEffect(() => {
     if (!estoqueId && dados.estoques.length) setEstoqueId(dados.estoques[0].id)
   }, [dados.estoques, estoqueId])
+
+  // Estorno aberto a partir do histórico: chega com o lançamento já montado.
+  useEffect(() => {
+    if (!estornoPendente) return
+    const m = estornoPendente
+    setAcao('devolucao')
+    setEstoqueId(m.estoqueId)
+    setItem(dados.itemPorId(m.itemId) || null)
+    setQtd(String(m.qtd))
+    setMotivo('Erro de dispensação')
+    setPacienteNome(m.pacienteNome || '')
+    setDestinoInterno(m.destinoInterno || m.estoqueNome || '')
+    setObservacao(`Estorno do consumo de ${m.itemDescricao}`)
+    setEstornoDe(m.id)
+    aoConsumirEstorno && aoConsumirEstorno()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [estornoPendente, dados, aoConsumirEstorno])
 
   useEffect(() => {
     if (estoqueId) localStorage.setItem('estoque-atual', estoqueId)
@@ -104,7 +126,7 @@ export default function Movimentar () {
     setObservacao(''); setEditandoId(null); setErro('')
     setFinalidade(''); setPacienteNome(''); setPacienteCPF('')
     setPrescritor(null); setResponsavel(null); setDestinoInterno('')
-    setLoteEscolhido(null); setMotivo('')
+    setLoteEscolhido(null); setMotivo(''); setEstornoDe('')
     setChaveBusca(k => k + 1)
   }
 
@@ -116,13 +138,15 @@ export default function Movimentar () {
     if (!item) return setErro('Escolha o item.')
     if (acao === 'consumo' && !finalidade) return setErro('Escolha se é dispensação a paciente ou consumo interno.')
     if (acao === 'descarte' && !motivo) return setErro('Informe o motivo do descarte.')
+    if (acao === 'devolucao' && !motivo) return setErro('Informe o motivo da devolução.')
 
     const quantidade = Number(String(qtd).replace(',', '.'))
     if (!(quantidade > 0)) return setErro('Informe uma quantidade maior que zero.')
 
-    if (acao !== 'entrada') {
+    if (!SOMA_AO_ESTOQUE.includes(acao)) {
       const jaNoRascunho = linhas
-        .filter(l => l.id !== editandoId && l.itemId === item.id && l.estoqueId === estoqueId && l.tipo !== 'entrada')
+        .filter(l => l.id !== editandoId && l.itemId === item.id && l.estoqueId === estoqueId &&
+          !SOMA_AO_ESTOQUE.includes(l.tipo))
         .reduce((s, l) => s + Number(l.qtd), 0)
 
       const disponivel = loteEscolhido
@@ -155,19 +179,22 @@ export default function Movimentar () {
       itemGrupoFarmacologico: item.grupoFarmacologico,
       itemControlado: item.controlado,
       qtd: quantidade,
-      lote: acao === 'entrada' ? lote.trim() : '',
-      validade: acao === 'entrada' ? (validade || null) : null,
+      lote: SOMA_AO_ESTOQUE.includes(acao) ? lote.trim() : '',
+      validade: SOMA_AO_ESTOQUE.includes(acao) ? (validade || null) : null,
       loteEscolhido: acao === 'descarte' ? loteEscolhido : null,
       motivo,
       observacao: observacao.trim(),
       finalidade: acao === 'consumo' ? finalidade : '',
-      pacienteNome: acao === 'consumo' && finalidade === 'paciente' ? pacienteNome.trim() : '',
+      pacienteNome: (acao === 'devolucao' || (acao === 'consumo' && finalidade === 'paciente'))
+        ? pacienteNome.trim() : '',
       pacienteCPF: acao === 'consumo' && finalidade === 'paciente' ? pacienteCPF.trim() : '',
       prescritorNome: acao === 'consumo' && finalidade === 'paciente' ? (prescritor?.nome || '') : '',
       prescritorConselho: acao === 'consumo' && finalidade === 'paciente' ? (prescritor?.conselho || '') : '',
       responsavelNome: acao === 'consumo' ? (responsavel?.nome || '') : '',
       responsavelConselho: acao === 'consumo' ? (responsavel?.conselho || '') : '',
-      destinoInterno: acao === 'consumo' && finalidade === 'interno' ? destinoInterno.trim() : ''
+      destinoInterno: (acao === 'devolucao' || (acao === 'consumo' && finalidade === 'interno'))
+        ? destinoInterno.trim() : '',
+      estornoDe: estornoDe || ''
     }
 
     setLinhas(atual => (editandoId ? atual.map(l => (l.id === editandoId ? linha : l)) : [linha, ...atual]))
@@ -389,6 +416,42 @@ export default function Movimentar () {
             </div>
           )}
 
+          {/* ---------- DEVOLUÇÃO ---------- */}
+          {acao === 'devolucao' && (
+            <div className="bloco">
+              <div className="info-caixa" style={{ marginBottom: 12 }}>
+                O item volta para o saldo deste estoque. Use para sobra de setor,
+                alta do paciente ou correção de uma baixa feita errado.
+              </div>
+
+              <label className="rotulo" htmlFor="mdev">Motivo da devolução</label>
+              <select id="mdev" className="campo" value={motivo} onChange={e => { setMotivo(e.target.value); setErro('') }}>
+                <option value="">Escolha o motivo…</option>
+                {MOTIVOS_DEVOLUCAO.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+
+              <div className="cartao" style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+                <p className="dica">Quem devolveu, se quiser registrar.</p>
+                <div>
+                  <label className="rotulo" htmlFor="devsetor">Setor de origem</label>
+                  <input
+                    id="devsetor" className="campo" value={destinoInterno}
+                    onChange={e => setDestinoInterno(e.target.value)}
+                    placeholder="Ex.: Clínica Médica, Emergência"
+                  />
+                </div>
+                <div>
+                  <label className="rotulo" htmlFor="devpac">Paciente</label>
+                  <input
+                    id="devpac" className="campo" value={pacienteNome}
+                    onChange={e => setPacienteNome(e.target.value)}
+                    autoCapitalize="words"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ---------- DESCARTE ---------- */}
           {acao === 'descarte' && (
             <div className="bloco">
@@ -428,12 +491,12 @@ export default function Movimentar () {
           <div className="bloco">
             <button className="btn fantasma pequeno" style={{ padding: 0 }} onClick={() => setDetalhes(v => !v)}>
               {detalhesAbertos ? '− ' : '+ '}
-              {acao === 'entrada' ? 'Lote, validade e origem (opcional)' : 'Outros detalhes (opcional)'}
+              {SOMA_AO_ESTOQUE.includes(acao) ? 'Lote, validade e origem (opcional)' : 'Outros detalhes (opcional)'}
             </button>
 
             {detalhesAbertos && (
               <div className="cartao" style={{ marginTop: 10, display: 'grid', gap: 12 }}>
-                {acao === 'entrada' && (
+                {SOMA_AO_ESTOQUE.includes(acao) && (
                   <>
                     <div className="linha-campos">
                       <div>
@@ -452,13 +515,15 @@ export default function Movimentar () {
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="rotulo" htmlFor="morig">Origem</label>
-                      <select id="morig" className="campo" value={motivo} onChange={e => setMotivo(e.target.value)}>
-                        <option value="">Não informar</option>
-                        {MOTIVOS_ENTRADA.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
+                    {acao === 'entrada' && (
+                      <div>
+                        <label className="rotulo" htmlFor="morig">Origem</label>
+                        <select id="morig" className="campo" value={motivo} onChange={e => setMotivo(e.target.value)}>
+                          <option value="">Não informar</option>
+                          {MOTIVOS_ENTRADA.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                    )}
                   </>
                 )}
                 <div>
@@ -519,7 +584,7 @@ export default function Movimentar () {
                   </div>
                 </div>
                 <div className={'qtd num ' + l.tipo}>
-                  {l.tipo === 'entrada' ? '+' : l.tipo === 'transferencia' ? '⇄' : '−'}
+                  {SOMA_AO_ESTOQUE.includes(l.tipo) ? '+' : l.tipo === 'transferencia' ? '⇄' : '−'}
                   {formatarNumero(l.qtd)}
                 </div>
                 <div className="btns">

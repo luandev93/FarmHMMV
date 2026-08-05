@@ -15,7 +15,7 @@ const PERIODOS = [
 
 /** Histórico de lançamentos. Aberto a todos os perfis: é dado de operação,
     não de auditoria — quem lançou aparece em cada linha. */
-export default function Movimentacoes () {
+export default function Movimentacoes ({ aoEstornar }) {
   const dados = useDados()
   const [tipo, setTipo] = useState('')
   const [estoqueId, setEstoqueId] = useState('')
@@ -140,11 +140,20 @@ export default function Movimentacoes () {
                     {m.observacao && ` · ${m.observacao}`}
                   </div>
                 </div>
-                <div className={'qtd num ' + m.tipo}>
-                  {m.tipo === 'entrada' ? '+'
-                    : m.tipo === 'inventario' ? '='
-                      : m.tipo === 'transferencia' ? '⇄' : '−'}
-                  {formatarNumero(m.qtd)}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <div className={'qtd num ' + m.tipo}>
+                    {(m.tipo === 'entrada' || m.tipo === 'devolucao') ? '+'
+                      : m.tipo === 'inventario' ? '='
+                        : m.tipo === 'transferencia' ? '⇄' : '−'}
+                    {formatarNumero(m.qtd)}
+                  </div>
+                  {aoEstornar && ['consumo', 'saida'].includes(m.tipo) && (
+                    <button
+                      className="btn secundario pequeno"
+                      style={{ minHeight: 32, fontSize: 12.5, padding: '0 10px' }}
+                      onClick={() => aoEstornar(m)}
+                    >Estornar</button>
+                  )}
                 </div>
               </div>
             ))}

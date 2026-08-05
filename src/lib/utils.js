@@ -111,6 +111,20 @@ export const NOMES_FUNCAO = {
 /** Quem opera o estoque. A enfermagem fica de fora: ela só cria solicitações. */
 export const FUNCOES_OPERACIONAIS = ['adm', 'farmaceutico', 'auxiliar']
 
+/** Senha inicial no formato DDMMAA a partir da data de nascimento. */
+export function senhaPeloNascimento (nascimento) {
+  const [a, m, d] = String(nascimento || '').slice(0, 10).split('-')
+  if (!a || !m || !d) return ''
+  return `${d}${m}${a.slice(2)}`
+}
+
+/** Completa com o domínio interno quando a pessoa entra só com o usuário. */
+export function completarLogin (texto) {
+  const t = String(texto || '').trim()
+  if (!t) return ''
+  return t.includes('@') ? t : `${t.toLowerCase()}@${DOMINIO_INTERNO}`
+}
+
 export const CARGOS_ENFERMAGEM = [
   'Admin',
   'Coordenador(a) de Enfermagem',
@@ -141,7 +155,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.7'
+export const VERSAO = '1.8'
 
 /** Domínio interno para quem não tem e-mail. Serve só como identificador de login. */
 export const DOMINIO_INTERNO = 'hmmv.local'
@@ -171,6 +185,7 @@ export const TIPOS_MOVIMENTO = {
   entrada: { nome: 'Entrada', sinal: '+' },
   consumo: { nome: 'Consumo', sinal: '−' },
   descarte: { nome: 'Descarte', sinal: '−' },
+  devolucao: { nome: 'Devolução', sinal: '+' },
   transferencia: { nome: 'Transferência', sinal: '⇄' },
   inventario: { nome: 'Inventário', sinal: '=' },
   saida: { nome: 'Saída', sinal: '−' }
@@ -180,11 +195,12 @@ export const TIPOS_MOVIMENTO = {
 export const ACOES_ESTOQUE = {
   entrada: 'Adicionar',
   consumo: 'Consumir',
+  devolucao: 'Devolver',
   transferencia: 'Transferir',
   descarte: 'Descartar'
 }
 
-export const ACOES_PADRAO = ['entrada', 'consumo', 'transferencia', 'descarte']
+export const ACOES_PADRAO = ['entrada', 'consumo', 'devolucao', 'transferencia', 'descarte']
 
 /** Tipos de movimento que retiram saldo do local. */
 export const TIPOS_QUE_CONSOMEM = ['consumo', 'descarte', 'saida', 'transferencia']
@@ -234,6 +250,17 @@ export const MOTIVOS_DESCARTE = [
   'Recolhimento / recall',
   'Devolução ao fornecedor',
   'Extravio',
+  'Outro'
+]
+
+export const MOTIVOS_DEVOLUCAO = [
+  'Alta hospitalar',
+  'Dose não administrada',
+  'Prescrição suspensa',
+  'Óbito do paciente',
+  'Transferência do paciente',
+  'Erro de dispensação',
+  'Sobra de setor',
   'Outro'
 ]
 

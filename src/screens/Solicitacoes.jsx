@@ -104,6 +104,7 @@ export default function Solicitacoes () {
             const n = await atenderSolicitacao(aberta, linhas, ctx, {
               estoqueId: dispensacao?.id,
               estoqueNome: dispensacao?.nome,
+              permitirNegativo: dados.config.permitirSaldoNegativo,
               observacao
             })
             setAberta(null)

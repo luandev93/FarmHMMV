@@ -94,6 +94,34 @@ export function ProvedorDados ({ children }) {
 
     const itemPorId = id => itens.find(i => i.id === id)
 
+    /* Quem já tem acesso ao sistema não precisa ser cadastrado de novo como
+       profissional: entra na lista de escolha a partir do próprio perfil. */
+    const tipoPeloPerfil = u => {
+      const cargo = u.enfermagem?.ativo ? u.enfermagem.cargo : ''
+      if (cargo.includes('Técnico')) return 'tecnico'
+      if (cargo.includes('Enfermeiro') || cargo.includes('Coordenador')) return 'enfermeiro'
+      if (u.funcao === 'farmaceutico' || u.funcao === 'adm') return 'farmaceutico'
+      if (cargo === 'Admin') return 'enfermeiro'
+      return ''
+    }
+
+    const daEquipe = usuarios
+      .filter(u => u.ativo !== false && tipoPeloPerfil(u))
+      .map(u => ({
+        id: 'usuario:' + u.id,
+        nome: u.nome,
+        tipo: tipoPeloPerfil(u),
+        conselho: (u.enfermagem?.coren || u.registro || '').split(' ')[0] || '',
+        numero: (u.enfermagem?.coren || u.registro || '').split(' ').slice(1).join(' '),
+        uf: '',
+        especialidade: u.enfermagem?.setorPadrao || '',
+        ativo: true,
+        temAcesso: true
+      }))
+
+    const paraEscolha = [...daEquipe, ...profissionais]
+      .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+
     // Ações que cada local aceita. Local sem regra definida aceita todas.
     const acoesDe = estoqueId => {
       const e = estoques.find(x => x.id === estoqueId)
@@ -129,6 +157,7 @@ export function ProvedorDados ({ children }) {
       lotes,
       usuarios,
       profissionais,
+      paraEscolha,
       solicitacoesPendentes,
       config,
       carregando: !(prontos.itens && prontos.estoques && prontos.saldos),

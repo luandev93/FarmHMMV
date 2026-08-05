@@ -253,8 +253,8 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
       criadoEm: carimbo
     }
 
-    /* ---------- ENTRADA ---------- */
-    if (linha.tipo === 'entrada') {
+    /* ---------- ENTRADA e DEVOLUÇÃO ---------- */
+    if (linha.tipo === 'entrada' || linha.tipo === 'devolucao') {
       const ref = idLote(linha.estoqueId, linha.itemId, linha.lote, linha.validade)
       operacoes.push({
         tipo: 'set',
@@ -276,11 +276,13 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
         ref: collection(db, 'movimentos'),
         dados: {
           ...comum,
-          tipo: 'entrada',
+          tipo: linha.tipo,
           estoqueId: linha.estoqueId,
           estoqueNome: linha.estoqueNome,
           lote: linha.lote || '',
-          validade: linha.validade || null
+          validade: linha.validade || null,
+          // Quando é estorno, guarda a qual movimentação se refere.
+          estornoDe: linha.estornoDe || ''
         }
       })
       aplicarNaMemoria(porLocal[linha.estoqueId], ref, linha, qtd)
@@ -582,6 +584,19 @@ export async function consumoPorItem (dias, { incluirDescarte = false } = {}) {
   snap.docs.forEach(d => {
     const m = d.data()
     total[m.itemId] = (total[m.itemId] || 0) + (m.qtd || 0)
+  })
+
+  // O que voltou por devolução não foi consumido de fato.
+  const devolvido = await getDocs(query(
+    collection(db, 'movimentos'),
+    where('tipo', '==', 'devolucao'),
+    where('criadoEm', '>=', Timestamp.fromDate(desde)),
+    orderBy('criadoEm', 'desc'),
+    limit(2000)
+  ))
+  devolvido.docs.forEach(d => {
+    const m = d.data()
+    if (total[m.itemId]) total[m.itemId] = Math.max(0, total[m.itemId] - (m.qtd || 0))
   })
   const media = {}
   Object.entries(total).forEach(([id, soma]) => { media[id] = { total: soma, diario: soma / dias } })
@@ -908,7 +923,9 @@ export async function atenderSolicitacao (solicitacao, linhasAtendidas, ctx, opc
     observacao: [solicitacao.observacao, opcoes.observacao].filter(Boolean).join(' · ')
   }))
 
-  await salvarLancamentos(lancamentos, ctx, { permitirNegativo: false })
+  await salvarLancamentos(lancamentos, ctx, {
+    permitirNegativo: Boolean(opcoes.permitirNegativo)
+  })
 
   const pediu = solicitacao.linhas.reduce((s, l) => s + Number(l.qtdSolicitada || 0), 0)
   const saiu = aBaixar.reduce((s, l) => s + Number(l.qtdAtendida), 0)

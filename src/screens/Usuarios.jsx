@@ -7,7 +7,7 @@ import { salvarPerfilUsuario, excluirPerfilUsuario } from '../lib/db'
 import { comAppParalelo, auth } from '../firebase'
 import {
   CARGOS_ENFERMAGEM, DOMINIO_INTERNO, NOMES_FUNCAO, SETORES_ENFERMAGEM,
-  dataBR, diasParaAniversario, idade, sugerirUsuario
+  dataBR, diasParaAniversario, idade, senhaPeloNascimento, sugerirUsuario
 } from '../lib/utils'
 
 export default function Usuarios () {
@@ -18,8 +18,23 @@ export default function Usuarios () {
   const [editando, setEditando] = useState(null)
   const [criando, setCriando] = useState(false)
   const [removendo, setRemovendo] = useState(null)
+  const [trocaRT, setTrocaRT] = useState(null)
+
+  /* Cada classe tem um único RT: ao marcar outro, o anterior é liberado. */
+  async function aplicarRT (uid, dados) {
+    const campos = [
+      ['rtFarmacia', 'da farmácia'],
+      ['rtEnfermagem', 'de enfermagem']
+    ]
+    for (const [campo] of campos) {
+      if (!dados[campo]) continue
+      const anterior = dados_usuarios.find(u => u[campo] && u.id !== uid)
+      if (anterior) await salvarPerfilUsuario(anterior.id, { [campo]: false }, ctx)
+    }
+  }
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
+  const dados_usuarios = dados.usuarios
 
   const [area, setArea] = useState('')
 
@@ -86,6 +101,8 @@ export default function Usuarios () {
                 {u.enfermagem?.ativo && (
                   <span className="etq ok">{u.enfermagem.cargo}</span>
                 )}
+                {u.rtFarmacia && <span className="etq controle">RT Farmácia</span>}
+                {u.rtEnfermagem && <span className="etq controle">RT Enfermagem</span>}
                 {u.ativo === false && <span className="etq alerta">acesso suspenso</span>}
                 {u.id === usuario.uid && <span className="etq ok">você</span>}
               </div>
@@ -110,6 +127,10 @@ export default function Usuarios () {
                 registro: d.registro || '',
                 ativo: true,
                 criadoPor: perfil.nome,
+                rtFarmacia: Boolean(d.rtFarmacia),
+                rtEnfermagem: Boolean(d.rtEnfermagem),
+                // Enquanto for provisória, o app exige a troca no primeiro acesso.
+                senhaProvisoria: true,
                 enfermagem: d.naEnfermagem
                   ? {
                       ativo: true,
@@ -141,9 +162,37 @@ export default function Usuarios () {
             }
           }}
           aoSalvar={async d => {
+            const conflito = ['rtFarmacia', 'rtEnfermagem']
+              .filter(c => d[c])
+              .map(c => ({ campo: c, anterior: dados.usuarios.find(u => u[c] && u.id !== editando.id) }))
+              .find(x => x.anterior)
+
+            if (conflito && !trocaRT) {
+              setTrocaRT({ dados: d, ...conflito })
+              return
+            }
+            await aplicarRT(editando.id, d)
             await salvarPerfilUsuario(editando.id, d, ctx)
+            setTrocaRT(null)
             setEditando(null)
             avisar('Cadastro atualizado.', 'ok')
+          }}
+        />
+      )}
+
+      {trocaRT && (
+        <Confirmar
+          titulo="Transferir a responsabilidade técnica?"
+          texto={`${trocaRT.anterior.nome} é o RT ${trocaRT.campo === 'rtFarmacia' ? 'da farmácia' : 'de enfermagem'} hoje. Ao confirmar, a responsabilidade passa para ${editando?.nome} e a troca fica registrada na auditoria.`}
+          rotuloConfirmar="Transferir"
+          aoFechar={() => setTrocaRT(null)}
+          aoConfirmar={async () => {
+            const d = trocaRT.dados
+            await aplicarRT(editando.id, d)
+            await salvarPerfilUsuario(editando.id, d, ctx)
+            setTrocaRT(null)
+            setEditando(null)
+            avisar('Responsabilidade técnica transferida.', 'ok')
           }}
         />
       )}
@@ -169,8 +218,9 @@ export default function Usuarios () {
 function FormularioNovo ({ aoCriar, aoFechar }) {
   const [f, setF] = useState({
     nome: '', email: '', senha: '', funcao: 'auxiliar', usarEmailProprio: false,
-    nascimento: '', telefone: '', registro: '',
-    naEnfermagem: false, cargo: 'Técnico(a) de Enfermagem', coren: '', setorPadrao: ''
+    nascimento: '', telefone: '', registro: '', senhaPorNascimento: true,
+    naEnfermagem: false, cargo: 'Técnico(a) de Enfermagem', coren: '', setorPadrao: '',
+    rtFarmacia: false, rtEnfermagem: false
   })
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -179,6 +229,9 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
   async function enviar () {
     if (!f.nome.trim()) return setErro('Informe o nome.')
     if (!f.email.trim()) return setErro(f.usarEmailProprio ? 'Informe o e-mail.' : 'Informe o nome de usuário.')
+    if (f.senhaPorNascimento && !f.nascimento) {
+      return setErro('Informe a data de nascimento para gerar a senha inicial.')
+    }
     if (f.senha.length < 6) return setErro('A senha provisória precisa ter pelo menos 6 caracteres.')
     setSalvando(true)
     setErro('')
@@ -268,9 +321,32 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
             </>
           )}
         </div>
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+          <input
+            type="checkbox" checked={f.senhaPorNascimento}
+            onChange={e => setF(a => ({
+              ...a,
+              senhaPorNascimento: e.target.checked,
+              senha: e.target.checked ? senhaPeloNascimento(a.nascimento) : ''
+            }))}
+            style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+          />
+          <span>
+            Senha inicial pela data de nascimento
+            <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+              Fica no formato DDMMAA. O sistema exige a troca no primeiro acesso.
+            </small>
+          </span>
+        </label>
+
         <div>
           <label className="rotulo">Senha provisória</label>
-          <input className="campo" type="text" value={f.senha} onChange={e => troca('senha', e.target.value)} />
+          <input
+            className="campo num" type="text" value={f.senha}
+            readOnly={f.senhaPorNascimento}
+            onChange={e => troca('senha', e.target.value)}
+            placeholder={f.senhaPorNascimento ? 'preencha o nascimento abaixo' : ''}
+          />
         </div>
         <div>
           <label className="rotulo">Função</label>
@@ -283,7 +359,14 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
         <div className="linha-campos">
           <div>
             <label className="rotulo">Nascimento</label>
-            <input className="campo" type="date" value={f.nascimento} onChange={e => troca('nascimento', e.target.value)} />
+            <input
+              className="campo" type="date" value={f.nascimento}
+              onChange={e => setF(a => ({
+                ...a,
+                nascimento: e.target.value,
+                senha: a.senhaPorNascimento ? senhaPeloNascimento(e.target.value) : a.senha
+              }))}
+            />
           </div>
           <div>
             <label className="rotulo">Telefone</label>
@@ -294,6 +377,20 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
           <label className="rotulo">Registro profissional (CRF, COREN…)</label>
           <input className="campo" value={f.registro} onChange={e => troca('registro', e.target.value)} />
         </div>
+
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+            <input
+              type="checkbox" checked={Boolean(f.rtFarmacia)}
+              onChange={e => troca('rtFarmacia', e.target.checked)}
+              style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+            />
+            <span>
+              Responsável Técnico da farmácia
+              <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                Identificado pelo CRF nos relatórios de controlados.
+              </small>
+            </span>
+          </label>
 
         <div style={{ borderTop: '1px solid var(--borda)', paddingTop: 14, display: 'grid', gap: 12 }}>
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
@@ -331,6 +428,20 @@ function FormularioNovo ({ aoCriar, aoFechar }) {
                   </select>
                 </div>
               </div>
+
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+                <input
+                  type="checkbox" checked={Boolean(f.rtEnfermagem)}
+                  onChange={e => troca('rtEnfermagem', e.target.checked)}
+                  style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+                />
+                <span>
+                  Responsável Técnico de enfermagem
+                  <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                    Identificado pelo COREN.
+                  </small>
+                </span>
+              </label>
             </>
           )}
         </div>
@@ -346,6 +457,7 @@ function FormularioEdicao ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnv
     nome: pessoa.nome || '', funcao: pessoa.funcao || 'auxiliar',
     nascimento: pessoa.nascimento || '', telefone: pessoa.telefone || '',
     registro: pessoa.registro || '', ativo: pessoa.ativo !== false,
+    rtFarmacia: Boolean(pessoa.rtFarmacia), rtEnfermagem: Boolean(pessoa.rtEnfermagem),
     naEnfermagem: Boolean(pessoa.enfermagem?.ativo),
     cargo: pessoa.enfermagem?.cargo || 'Técnico(a) de Enfermagem',
     coren: pessoa.enfermagem?.coren || '',
@@ -414,6 +526,20 @@ function FormularioEdicao ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnv
           <input className="campo" value={f.registro} onChange={e => troca('registro', e.target.value)} />
         </div>
 
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+            <input
+              type="checkbox" checked={Boolean(f.rtFarmacia)}
+              onChange={e => troca('rtFarmacia', e.target.checked)}
+              style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+            />
+            <span>
+              Responsável Técnico da farmácia
+              <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                Identificado pelo CRF nos relatórios de controlados.
+              </small>
+            </span>
+          </label>
+
         <div style={{ borderTop: '1px solid var(--borda)', paddingTop: 14, display: 'grid', gap: 12 }}>
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
             <input
@@ -450,6 +576,20 @@ function FormularioEdicao ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnv
                   </select>
                 </div>
               </div>
+
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+                <input
+                  type="checkbox" checked={Boolean(f.rtEnfermagem)}
+                  onChange={e => troca('rtEnfermagem', e.target.checked)}
+                  style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+                />
+                <span>
+                  Responsável Técnico de enfermagem
+                  <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+                    Identificado pelo COREN.
+                  </small>
+                </span>
+              </label>
             </>
           )}
         </div>

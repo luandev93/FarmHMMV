@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Carregando, Icone, ProvedorAviso, Vazio } from './components/ui'
-import { ProvedorAuth, useAuth } from './lib/auth'
+import { ProvedorAuth, useAuth, traduzirErro } from './lib/auth'
 import { ProvedorDados, useDados } from './lib/store'
 import { VERSAO, diasParaAniversario, formatarNumero } from './lib/utils'
 
@@ -32,8 +32,8 @@ const TELAS = {
   movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
   auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
   locais: { titulo: 'Locais de estoque', subtitulo: 'Regras de cada setor', comp: Locais },
-  profissionais: { titulo: 'Profissionais', subtitulo: 'Prescritores, enfermeiros e técnicos', comp: Profissionais },
-  usuarios: { titulo: 'Pessoas', subtitulo: 'Acessos, funções e aniversários', comp: Usuarios },
+  profissionais: { titulo: 'Prescritores', subtitulo: 'Quem não tem acesso ao sistema', comp: Profissionais },
+  usuarios: { titulo: 'Pessoas', subtitulo: 'Acessos, cargos e aniversários', comp: Usuarios },
   config: { titulo: 'Configurações', subtitulo: '', comp: Config, exige: 'adm' },
   perfil: { titulo: 'Meu perfil', subtitulo: '', comp: Perfil }
 }
@@ -62,6 +62,9 @@ function Roteador () {
   if (perfil.ativo === false) {
     return <AcessoSuspenso />
   }
+  if (perfil.senhaProvisoria) {
+    return <TrocaObrigatoria />
+  }
   if (perfil.funcao === 'enfermagem') {
     return <SomenteEnfermagem />
   }
@@ -77,6 +80,7 @@ function Interface () {
   const { perfil, sair, ehAdm, ehFarmaceutico } = useAuth()
   const dados = useDados()
   const [tela, setTela] = useState('movimentar')
+  const [estornoPendente, setEstorno] = useState(null)
 
   useEffect(() => {
     const voltar = () => {
@@ -118,9 +122,22 @@ function Interface () {
       <main className="conteudo">
         {tela === 'mais'
           ? <Mais aoAbrir={setTela} podeVer={podeVer} aoSair={sair} />
-          : podeVer(tela)
-            ? <Componente />
-            : <Vazio titulo="Sem permissão" texto="Esta área é restrita ao seu perfil de acesso." />}
+          : !podeVer(tela)
+              ? <Vazio titulo="Sem permissão" texto="Esta área é restrita ao seu perfil de acesso." />
+              : tela === 'movimentar'
+                ? (
+                    <Componente
+                      estornoPendente={estornoPendente}
+                      aoConsumirEstorno={() => setEstorno(null)}
+                    />
+                  )
+                : tela === 'movimentacoes'
+                  ? (
+                      <Componente
+                        aoEstornar={m => { setEstorno(m); setTela('movimentar') }}
+                      />
+                    )
+                  : <Componente />}
       </main>
 
       <nav className="nav">
@@ -252,6 +269,64 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
         versão {VERSAO}
       </p>
     </>
+  )
+}
+
+/** Primeiro acesso: a senha entregue pelo administrador precisa ser trocada. */
+function TrocaObrigatoria () {
+  const { perfil, trocarSenha, salvarMeuPerfil, sair } = useAuth()
+  const [atual, setAtual] = useState('')
+  const [nova, setNova] = useState('')
+  const [confirma, setConfirma] = useState('')
+  const [erro, setErro] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+
+  return (
+    <div className="conteudo" style={{ paddingTop: 40, maxWidth: 420 }}>
+      <h1 style={{ fontSize: 19 }}>Crie a sua senha</h1>
+      <p className="dica" style={{ marginTop: 6, marginBottom: 18 }}>
+        {perfil.nome}, a senha que você recebeu é provisória e outras pessoas podem
+        conhecê-la. Escolha uma senha só sua para continuar.
+      </p>
+
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div>
+          <label className="rotulo">Senha atual</label>
+          <input className="campo" type="password" value={atual} onChange={e => setAtual(e.target.value)} />
+        </div>
+        <div>
+          <label className="rotulo">Senha nova</label>
+          <input className="campo" type="password" value={nova} onChange={e => setNova(e.target.value)} />
+        </div>
+        <div>
+          <label className="rotulo">Repita a senha nova</label>
+          <input className="campo" type="password" value={confirma} onChange={e => setConfirma(e.target.value)} />
+        </div>
+
+        {erro && <div className="erro-caixa">{erro}</div>}
+
+        <button
+          className="btn" disabled={ocupado}
+          onClick={async () => {
+            setErro('')
+            if (nova.length < 6) return setErro('A senha nova precisa ter pelo menos 6 caracteres.')
+            if (nova === atual) return setErro('A senha nova precisa ser diferente da provisória.')
+            if (nova !== confirma) return setErro('As duas senhas novas não coincidem.')
+            setOcupado(true)
+            try {
+              await trocarSenha(atual, nova)
+              await salvarMeuPerfil({ senhaProvisoria: false })
+            } catch (e) {
+              setErro(traduzirErro(e))
+            } finally {
+              setOcupado(false)
+            }
+          }}
+        >{ocupado ? 'Salvando…' : 'Salvar e entrar'}</button>
+
+        <button className="btn fantasma" onClick={sair}>Sair</button>
+      </div>
+    </div>
   )
 }
 
