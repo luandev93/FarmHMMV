@@ -3,7 +3,7 @@ import {
   query, where, orderBy, limit, writeBatch, increment, serverTimestamp, Timestamp, onSnapshot
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import { chaveSaldo, ordemFEFO, idAleatorio } from './utils'
+import { chaveSaldo, ordemFEFO, idAleatorio, semIndefinidos } from './utils'
 import catalogoPadrao from '../data/catalogo.json'
 
 /* =========================================================
@@ -325,6 +325,7 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
       responsavelNome: linha.responsavelNome || '',
       responsavelConselho: linha.responsavelConselho || '',
       destinoInterno: linha.destinoInterno || '',
+      reverteMovimento: linha.reverteMovimento || '',
       usuarioUid: ctx.uid,
       usuarioNome: ctx.nome,
       usuarioFuncao: ctx.funcao,
@@ -504,9 +505,10 @@ async function gravarEmBlocos (operacoes) {
   for (let i = 0; i < operacoes.length; i += TAMANHO) {
     const bloco = writeBatch(db)
     for (const op of operacoes.slice(i, i + TAMANHO)) {
-      if (op.tipo === 'add') bloco.set(doc(op.ref), op.dados)
-      else if (op.merge) bloco.set(op.ref, op.dados, { merge: true })
-      else bloco.set(op.ref, op.dados)
+      const dados = semIndefinidos(op.dados)
+      if (op.tipo === 'add') bloco.set(doc(op.ref), dados)
+      else if (op.merge) bloco.set(op.ref, dados, { merge: true })
+      else bloco.set(op.ref, dados)
     }
     await bloco.commit()
   }
@@ -1351,4 +1353,102 @@ export async function migrarParaPessoas (ctx) {
     `${comAcesso} com acesso e ${semAcesso} sem acesso migrados para o cadastro único`
   )
   return { comAcesso, semAcesso }
+}
+
+/* =========================================================
+   Reversão de lançamento
+   ========================================================= */
+
+export const JANELA_REVERSAO_MS = 60 * 60 * 1000   // uma hora
+
+/** Sinais invertidos: o que somou passa a subtrair, e vice-versa. */
+const INVERSO = {
+  entrada: 'descarte',
+  devolucao: 'consumo',
+  consumo: 'devolucao',
+  descarte: 'entrada',
+  saida: 'devolucao',
+  transferencia: 'transferencia'
+}
+
+export function podeReverter (movimento, agora = Date.now()) {
+  if (!movimento || movimento.revertido || movimento.reverteMovimento) return false
+  if (movimento.tipo === 'inventario') return false
+  const criado = movimento.criadoEm?.toMillis ? movimento.criadoEm.toMillis() : 0
+  if (!criado) return false
+  return agora - criado <= JANELA_REVERSAO_MS
+}
+
+export function minutosRestantes (movimento, agora = Date.now()) {
+  const criado = movimento.criadoEm?.toMillis ? movimento.criadoEm.toMillis() : 0
+  return Math.max(0, Math.ceil((JANELA_REVERSAO_MS - (agora - criado)) / 60000))
+}
+
+/**
+ * Desfaz um lançamento criando o oposto, amarrado ao original.
+ * Nada é apagado: os dois registros permanecem, que é o que sustenta o
+ * histórico como prova em fiscalização.
+ */
+export async function reverterMovimento (movimento, ctx) {
+  const atual = await getDoc(doc(db, 'movimentos', movimento.id))
+  if (!atual.exists()) throw new Error('Este lançamento não existe mais.')
+  const m = { id: atual.id, ...atual.data() }
+
+  if (m.revertido) throw new Error('Este lançamento já foi revertido.')
+  if (!podeReverter(m)) {
+    throw new Error(
+      'O prazo de uma hora para reverter já passou. A correção agora é por um novo ' +
+      'lançamento ou pelo inventário.'
+    )
+  }
+
+  const tipo = INVERSO[m.tipo]
+  if (!tipo) throw new Error('Este tipo de lançamento não pode ser revertido.')
+
+  // Transferência volta trocando origem e destino.
+  const linha = tipo === 'transferencia'
+    ? {
+        tipo: 'transferencia',
+        estoqueId: m.estoqueDestinoId,
+        estoqueNome: m.estoqueDestinoNome || '',
+        estoqueDestinoId: m.estoqueId,
+        estoqueDestinoNome: m.estoqueNome || ''
+      }
+    : { tipo, estoqueId: m.estoqueId, estoqueNome: m.estoqueNome || '' }
+
+  await salvarLancamentos([{
+    ...linha,
+    itemId: m.itemId,
+    itemCodigo: m.itemCodigo,
+    itemDescricao: m.itemDescricao,
+    itemUnidade: m.itemUnidade,
+    itemTipo: m.itemTipo || '',
+    itemControlado: m.itemControlado || '',
+    qtd: m.qtd,
+    lote: m.lote || '',
+    validade: m.validade || null,
+    motivo: 'Reversão de lançamento',
+    observacao: `Desfaz o ${m.tipo} de ${m.qtd} registrado por ${m.usuarioNome}`,
+    reverteMovimento: m.id
+  }], ctx, { permitirNegativo: false })
+
+  await updateDoc(doc(db, 'movimentos', m.id), {
+    revertido: true,
+    revertidoPor: ctx.nome,
+    revertidoEm: serverTimestamp()
+  })
+
+  const minutos = Math.round((Date.now() - (m.criadoEm?.toMillis?.() || 0)) / 60000)
+  await registrarLog(
+    ctx, 'movimentacao-revertida',
+    `${m.tipo} de ${m.qtd} × ${m.itemDescricao} em ${m.estoqueNome}, ` +
+    `lançado por ${m.usuarioNome} há ${minutos} min`,
+    'movimentos', m.id
+  )
+}
+
+/** Nova senha provisória para quem não tem e-mail de verdade. */
+export async function marcarSenhaProvisoria (pessoaId, ctx) {
+  await setDoc(doc(db, 'pessoas', pessoaId), { senhaProvisoria: true }, { merge: true })
+  await registrarLog(ctx, 'senha-redefinida', 'Senha provisória definida', 'pessoas', pessoaId)
 }

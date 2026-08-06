@@ -9,7 +9,7 @@ import {
 import { comAppParalelo, auth } from '../firebase'
 import {
   CARGOS_ENFERMAGEM, CONSELHOS, DOMINIO_INTERNO, FUNCOES_FARMACIA, MODULOS,
-  SETORES_ENFERMAGEM, UFS, dataBR, diasParaAniversario, idade, modulosDe, registroDe,
+  UFS, dataBR, diasParaAniversario, idade, modulosDe, registroDe,
   semAcento, senhaPeloNascimento, sugerirUsuario
 } from '../lib/utils'
 
@@ -378,16 +378,6 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
               {CARGOS_ENFERMAGEM.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div>
-            <label className="rotulo">Setor padrão</label>
-            <select
-              className="campo" value={f.enfermagem.setorPadrao}
-              onChange={e => trocaModulo('enfermagem', 'setorPadrao', e.target.value)}
-            >
-              <option value="">—</option>
-              {SETORES_ENFERMAGEM.map(x => <option key={x} value={x}>{x}</option>)}
-            </select>
-          </div>
           <Marcador
             rotulo="Responsável Técnico de enfermagem"
             valor={f.enfermagem.rt} aoTrocar={v => trocaModulo('enfermagem', 'rt', v)}
@@ -469,9 +459,25 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
           )}
 
           {f.acesso.temLogin && !novo && !ganhandoAcesso && (
-            <button className="btn secundario" onClick={aoEnviarRecuperacao}>
-              <Icone nome="cadeado" tamanho={18} /> Enviar e-mail para redefinir a senha
-            </button>
+            <>
+              {f.email?.endsWith('@' + DOMINIO_INTERNO) ? (
+                <div className="info-caixa">
+                  Esta pessoa entra por nome de usuário, sem e-mail de verdade — o link de
+                  redefinição não chega a lugar nenhum. Para trocar a senha dela, use o
+                  Console do Firebase, em Authentication, e depois marque abaixo para o
+                  sistema exigir a troca no próximo acesso.
+                </div>
+              ) : (
+                <button className="btn secundario" onClick={aoEnviarRecuperacao}>
+                  <Icone nome="cadeado" tamanho={18} /> Enviar e-mail para redefinir a senha
+                </button>
+              )}
+              <Marcador
+                rotulo="Exigir troca de senha no próximo acesso"
+                valor={f.senhaProvisoria}
+                aoTrocar={v => troca('senhaProvisoria', v)}
+              />
+            </>
           )}
 
           {!souEu && (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icone, Vazio } from '../components/ui'
 import { useDados } from '../lib/store'
-import { movimentosRecentes, estornosPorMovimento } from '../lib/db'
+import { movimentosRecentes, estornosPorMovimento, podeReverter, minutosRestantes, reverterMovimento } from '../lib/db'
 import {
   FINALIDADES_CONSUMO, NOMES_FUNCAO, baixarCSV, dataBR, dataHora, formatarNumero, semAcento
 } from '../lib/utils'
@@ -15,7 +15,7 @@ const PERIODOS = [
 
 /** Histórico de lançamentos. Aberto a todos os perfis: é dado de operação,
     não de auditoria — quem lançou aparece em cada linha. */
-export default function Movimentacoes ({ aoEstornar }) {
+export default function Movimentacoes ({ aoEstornar, ctx, aoAvisar }) {
   const dados = useDados()
   const [tipo, setTipo] = useState('')
   const [estoqueId, setEstoqueId] = useState('')
@@ -23,6 +23,14 @@ export default function Movimentacoes ({ aoEstornar }) {
   const [busca, setBusca] = useState('')
   const [linhas, setLinhas] = useState(null)
   const [estornado, setEstornado] = useState({})
+  const [revertendo, setRevertendo] = useState('')
+  const [agora, setAgora] = useState(Date.now())
+
+  // O botão de reverter expira em uma hora; o relógio anda a cada minuto.
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 60000)
+    return () => clearInterval(t)
+  }, [])
   const [erro, setErro] = useState('')
 
   useEffect(() => {
@@ -155,7 +163,32 @@ export default function Movimentacoes ({ aoEstornar }) {
                         : m.tipo === 'transferencia' ? '⇄' : '−'}
                     {formatarNumero(m.qtd)}
                   </div>
-                  {aoEstornar && ['consumo', 'saida'].includes(m.tipo) && (
+                  {ctx && podeReverter(m, agora) && (
+                    <button
+                      className="btn secundario pequeno"
+                      style={{ minHeight: 32, fontSize: 12.5, padding: '0 10px' }}
+                      disabled={revertendo === m.id}
+                      onClick={async () => {
+                        setRevertendo(m.id)
+                        try {
+                          await reverterMovimento(m, ctx)
+                          aoAvisar?.('Lançamento revertido.', 'ok')
+                          setLinhas(a => a.map(x => x.id === m.id ? { ...x, revertido: true } : x))
+                        } catch (e) {
+                          aoAvisar?.(e.message, 'erro')
+                        } finally {
+                          setRevertendo('')
+                        }
+                      }}
+                    >
+                      {revertendo === m.id ? 'Revertendo…' : `Reverter (${minutosRestantes(m, agora)} min)`}
+                    </button>
+                  )}
+
+                  {m.revertido && <span className="etq alerta">revertido</span>}
+                  {m.reverteMovimento && <span className="etq">é uma reversão</span>}
+
+                  {aoEstornar && !m.revertido && ['consumo', 'saida'].includes(m.tipo) && (
                     restaEstornar(m) > 0 ? (
                       <button
                         className="btn secundario pequeno"

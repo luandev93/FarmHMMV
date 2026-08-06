@@ -160,6 +160,20 @@ export const SITUACOES_SOLICITACAO = {
   recusada: 'Recusada'
 }
 
+/** O Firestore recusa campos indefinidos; o navegador aceitava calado. */
+export function semIndefinidos (valor) {
+  if (Array.isArray(valor)) return valor.map(semIndefinidos)
+  if (valor && typeof valor === 'object' && !valor.toDate && !(valor instanceof Date)) {
+    const saida = {}
+    Object.entries(valor).forEach(([k, v]) => {
+      if (v === undefined) return
+      saida[k] = semIndefinidos(v)
+    })
+    return saida
+  }
+  return valor
+}
+
 export const MOTIVOS_RECUSA = [
   'Item sem saldo na farmácia',
   'Prescrição não localizada',
@@ -169,7 +183,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '2.0'
+export const VERSAO = '1.13'
 
 /* =========================================================
    Cadastro único de pessoas

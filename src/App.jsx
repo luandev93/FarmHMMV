@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Carregando, Icone, ProvedorAviso, Vazio } from './components/ui'
+import { Carregando, Icone, ProvedorAviso, Vazio, useAviso } from './components/ui'
 import { ProvedorAuth, useAuth, traduzirErro } from './lib/auth'
 import { ProvedorDados, useDados } from './lib/store'
 import { VERSAO, diasParaAniversario, formatarNumero } from './lib/utils'
@@ -23,12 +23,12 @@ import Perfil from './screens/Perfil'
 const TELAS = {
   movimentar: { titulo: 'Movimentar', subtitulo: 'Adicionar, consumir, transferir ou descartar', icone: 'transferencia', comp: Movimentar },
   estoque: { titulo: 'Estoque', subtitulo: 'Saldos, lotes e validades', icone: 'caixa', comp: Estoque },
-  pedido: { titulo: 'Pedido', subtitulo: 'Sugestão de reposição', icone: 'pedido', comp: Pedido },
+  pedido: { titulo: 'Reposição', subtitulo: 'Sugestão de compra', icone: 'pedido', comp: Pedido },
   mais: { titulo: 'Mais', subtitulo: '', icone: 'menu', comp: null },
 
   inventario: { titulo: 'Inventário', subtitulo: 'Contagem que substitui o saldo', comp: Inventario, exige: 'farmaceutico' },
   catalogo: { titulo: 'Catálogo', subtitulo: 'Itens, categorias e estoque mínimo', comp: Catalogo, exige: 'farmaceutico' },
-  solicitacoes: { titulo: 'Pedidos', subtitulo: 'Solicitações da enfermagem', icone: 'solicitacoes', comp: Solicitacoes },
+  solicitacoes: { titulo: 'Requisições', subtitulo: 'Pedidos vindos da enfermagem', icone: 'solicitacoes', comp: Solicitacoes },
   relatorios: { titulo: 'Curva ABC', subtitulo: 'Classificação por valor e previsibilidade', comp: Relatorios, exige: 'farmaceutico' },
   movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
   auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
@@ -77,7 +77,8 @@ function Roteador () {
 }
 
 function Interface () {
-  const { perfil, sair, ehAdm, ehFarmaceutico } = useAuth()
+  const { perfil, usuario, sair, ehAdm, ehFarmaceutico } = useAuth()
+  const avisar = useAviso()
   const dados = useDados()
   const [tela, setTela] = useState('movimentar')
   const [estornoPendente, setEstorno] = useState(null)
@@ -135,6 +136,8 @@ function Interface () {
                   ? (
                       <Componente
                         aoEstornar={m => { setEstorno(m); setTela('movimentar') }}
+                        ctx={{ uid: usuario?.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao }}
+                        aoAvisar={avisar}
                       />
                     )
                   : <Componente />}
@@ -186,7 +189,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
         >
           <Icone nome="pedido" tamanho={22} />
           <div style={{ fontSize: 14 }}>
-            <b>{dados.solicitacoesPendentes} solicitação(ões) da enfermagem</b>
+            <b>{dados.solicitacoesPendentes} requisição(ões) da enfermagem</b>
             <div className="dica">aguardando a farmácia</div>
           </div>
           <Icone nome="seta" tamanho={18} />

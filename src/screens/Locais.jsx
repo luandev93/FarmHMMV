@@ -3,7 +3,7 @@ import { Confirmar, Icone, Painel, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import { salvarEstoque, excluirEstoque } from '../lib/db'
-import { ACOES_ESTOQUE, ACOES_PADRAO, SETORES_ENFERMAGEM, formatarNumero } from '../lib/utils'
+import { ACOES_ESTOQUE, ACOES_PADRAO, formatarNumero } from '../lib/utils'
 
 export default function Locais () {
   const { perfil, usuario, ehAdm } = useAuth()
@@ -49,7 +49,7 @@ export default function Locais () {
               <div className="meta">
                 {e.descricao && <span>{e.descricao}</span>}
                 {e.ativo === false && <span className="etq alerta">desativado</span>}
-                {e.setorEnfermagem && <span className="etq ok">{e.setorEnfermagem}</span>}
+                {e.requisicaoEnfermagem && <span className="etq ok">requisição da enfermagem</span>}
                 {Array.isArray(e.acoes) && e.acoes.length > 0 && e.acoes.length < 4 && (
                   <span className="etq">
                     {e.acoes.map(a => ACOES_ESTOQUE[a]).filter(Boolean).join(' · ')}
@@ -140,20 +140,20 @@ function FormularioLocal ({ local, aoSalvar, aoFechar, aoExcluir }) {
           <label className="rotulo">Descrição</label>
           <input className="campo" value={f.descricao || ''} onChange={e => troca('descricao', e.target.value)} />
         </div>
-        <div>
-          <label className="rotulo">Setor da enfermagem atendido por este local</label>
-          <select
-            className="campo" value={f.setorEnfermagem || ''}
-            onChange={e => troca('setorEnfermagem', e.target.value)}
-          >
-            <option value="">Nenhum</option>
-            {SETORES_ENFERMAGEM.map(x => <option key={x} value={x}>{x}</option>)}
-          </select>
-          <p className="dica" style={{ marginTop: 5 }}>
-            Quando a enfermagem pedir reposição em vez de consumo, o item é transferido
-            para cá.
-          </p>
-        </div>
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+          <input
+            type="checkbox" checked={Boolean(f.requisicaoEnfermagem)}
+            onChange={e => troca('requisicaoEnfermagem', e.target.checked)}
+            style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+          />
+          <span>
+            Habilitado para requisição da enfermagem
+            <small style={{ display: 'block', color: 'var(--tinta-fraca)', fontSize: 12.5, marginTop: 2 }}>
+              O local aparece como destino no app de plantão. Deixe desmarcado no
+              almoxarifado e na farmácia de origem.
+            </small>
+          </span>
+        </label>
 
         <div>
           <label className="rotulo">Ordem na lista</label>

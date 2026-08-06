@@ -62,12 +62,12 @@ export default function Config () {
       </div>
 
       <div className="cartao bloco">
-        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Integração com a enfermagem</h2>
+        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Dispensação</h2>
         <p className="dica" style={{ marginBottom: 12 }}>
-          As solicitações aceitas baixam deste local. O app de plantão enxerga apenas
-          código, descrição e se o item é controlado — nunca saldo nem preço.
+          Local de origem das requisições atendidas. Quais locais a enfermagem pode
+          receber é definido em cada um, na tela de Locais de estoque.
         </p>
-        <label className="rotulo" htmlFor="disp">Farmácia de dispensação</label>
+        <label className="rotulo" htmlFor="disp">Local de origem da dispensação</label>
         <select
           id="disp" className="campo" value={f.estoqueDispensacaoId || ''}
           onChange={e => troca('estoqueDispensacaoId', e.target.value)}
@@ -89,7 +89,7 @@ export default function Config () {
               setSincronizando(false)
             }
           }}
-        >{sincronizando ? 'Sincronizando…' : 'Sincronizar catálogo da enfermagem'}</button>
+        >{sincronizando ? 'Sincronizando…' : 'Sincronizar catálogo público'}</button>
       </div>
 
       <div className="cartao bloco">
@@ -153,6 +153,7 @@ export default function Config () {
         }}
       >{salvando ? 'Salvando…' : 'Salvar configurações'}</button>
 
+      {!dados.config.pessoasMigradas && (
       <div className="cartao" style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 15, marginBottom: 4 }}>Cadastro único de pessoas</h2>
         <p className="dica" style={{ marginBottom: 12 }}>
@@ -166,6 +167,7 @@ export default function Config () {
             setMigrando(true)
             try {
               const r = await migrarParaPessoas(ctx)
+              await salvarConfig({ pessoasMigradas: true }, ctx)
               avisar(`${r.comAcesso} com acesso e ${r.semAcesso} sem acesso migrados.`, 'ok')
             } catch (e) {
               avisar('Falhou: ' + e.message, 'erro')
@@ -175,6 +177,7 @@ export default function Config () {
           }}
         >{migrando ? 'Migrando…' : 'Migrar cadastros antigos'}</button>
       </div>
+      )}
 
       <div className="cartao" style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 15, marginBottom: 4 }}>Catálogo padrão</h2>
