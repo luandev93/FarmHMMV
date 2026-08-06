@@ -1184,3 +1184,171 @@ export async function estornosPorMovimento (dias = 365) {
   })
   return mapa
 }
+
+/* =========================================================
+   Cadastro único de pessoas
+   ========================================================= */
+
+/** Molde de uma pessoa recém-cadastrada. */
+export const PESSOA_VAZIA = {
+  nome: '',
+  nascimento: '',
+  telefone: '',
+  email: '',
+  conselho: { sigla: '', numero: '', uf: '' },
+  ativo: true,
+  acesso: { temLogin: false },
+  farmacia: { ativo: false, funcao: 'auxiliar', rt: false },
+  enfermagem: { ativo: false, cargo: 'Técnico(a) de Enfermagem', setorPadrao: '', rt: false },
+  medico: { ativo: false, especialidade: '', rt: false }
+}
+
+export async function salvarPessoa (id, dados, ctx) {
+  await setDoc(doc(db, 'pessoas', id), { ...dados, atualizadoEm: serverTimestamp() }, { merge: true })
+  if (ctx) await registrarLog(ctx, 'pessoa-salva', dados.nome || id, 'pessoas', id)
+}
+
+/** Pessoa sem acesso ao sistema: id automático, nada de conta de login. */
+export async function criarPessoaSemAcesso (dados, ctx) {
+  const ref = await addDoc(collection(db, 'pessoas'), {
+    ...dados,
+    acesso: { temLogin: false },
+    criadoEm: serverTimestamp(),
+    criadoPor: ctx.nome
+  })
+  await registrarLog(ctx, 'pessoa-criada', `${dados.nome} (sem acesso)`, 'pessoas', ref.id)
+  return ref.id
+}
+
+export async function excluirPessoa (pessoa, ctx) {
+  await deleteDoc(doc(db, 'pessoas', pessoa.id))
+  await registrarLog(
+    ctx, 'pessoa-removida',
+    pessoa.acesso?.temLogin
+      ? `${pessoa.nome} — acesso revogado. A conta de login precisa ser apagada no Console do Firebase.`
+      : pessoa.nome,
+    'pessoas', pessoa.id
+  )
+}
+
+/**
+ * Concede acesso a quem já estava cadastrado sem login.
+ * As regras identificam a pessoa pelo id do documento, que precisa ser o uid
+ * da conta — então o cadastro é copiado para o novo id e o antigo é removido.
+ */
+export async function mudarIdDePessoa (idAntigo, uid, dados, ctx) {
+  await setDoc(doc(db, 'pessoas', uid), {
+    ...dados,
+    acesso: { temLogin: true },
+    atualizadoEm: serverTimestamp()
+  })
+  if (idAntigo && idAntigo !== uid) await deleteDoc(doc(db, 'pessoas', idAntigo))
+  await registrarLog(ctx, 'pessoa-com-acesso', `${dados.nome} passou a ter acesso`, 'pessoas', uid)
+}
+
+/* ---------------------------------------------------------
+   Migração do modelo antigo
+   --------------------------------------------------------- */
+
+/** Separa "CRF 1234 PE" em sigla, número e UF. */
+function partirRegistro (texto, siglaPadrao = '') {
+  const t = String(texto || '').trim()
+  if (!t) return { sigla: siglaPadrao, numero: '', uf: '' }
+  const m = t.match(/^([A-Za-zÀ-ÿ]+)?\s*[-\s]?\s*(\d[\d.\-/]*)\s*([A-Za-z]{2})?$/)
+  if (!m) return { sigla: siglaPadrao, numero: t, uf: '' }
+  return {
+    sigla: (m[1] || siglaPadrao).toUpperCase(),
+    numero: m[2] || '',
+    uf: (m[3] || '').toUpperCase()
+  }
+}
+
+const TIPO_PARA_MODULO = {
+  prescritor: 'medico',
+  enfermeiro: 'enfermagem',
+  tecnico: 'enfermagem',
+  farmaceutico: 'farmacia'
+}
+
+/**
+ * Junta `usuarios` e `profissionais` no cadastro único.
+ * Roda quantas vezes for preciso: não duplica nem sobrescreve o que já migrou.
+ */
+export async function migrarParaPessoas (ctx) {
+  const [usuarios, profissionais, jaExistem] = await Promise.all([
+    getDocs(collection(db, 'usuarios')),
+    getDocs(collection(db, 'profissionais')),
+    getDocs(collection(db, 'pessoas'))
+  ])
+
+  const existentes = new Set(jaExistem.docs.map(d => d.id))
+  let lote = writeBatch(db)
+  let n = 0
+  let comAcesso = 0
+  let semAcesso = 0
+  const comitar = async () => { if (n) { await lote.commit(); lote = writeBatch(db); n = 0 } }
+
+  for (const d of usuarios.docs) {
+    if (existentes.has(d.id)) continue
+    const u = d.data()
+    const enf = u.enfermagem || {}
+    lote.set(doc(db, 'pessoas', d.id), {
+      nome: u.nome || '',
+      nascimento: u.nascimento || '',
+      telefone: u.telefone || '',
+      email: u.email || '',
+      conselho: partirRegistro(enf.coren || u.registro),
+      ativo: u.ativo !== false,
+      senhaProvisoria: Boolean(u.senhaProvisoria),
+      acesso: { temLogin: true },
+      farmacia: {
+        ativo: ['adm', 'farmaceutico', 'auxiliar'].includes(u.funcao),
+        funcao: ['adm', 'farmaceutico', 'auxiliar'].includes(u.funcao) ? u.funcao : 'auxiliar',
+        rt: Boolean(u.rtFarmacia)
+      },
+      enfermagem: {
+        ativo: Boolean(enf.ativo),
+        cargo: enf.cargo || 'Técnico(a) de Enfermagem',
+        setorPadrao: enf.setorPadrao || '',
+        rt: Boolean(u.rtEnfermagem)
+      },
+      medico: { ativo: false, especialidade: '', rt: false },
+      migradoEm: serverTimestamp()
+    })
+    comAcesso++
+    if (++n >= 400) await comitar()
+  }
+
+  for (const d of profissionais.docs) {
+    if (existentes.has(d.id)) continue
+    const p = d.data()
+    const modulo = TIPO_PARA_MODULO[p.tipo] || 'medico'
+    lote.set(doc(db, 'pessoas', d.id), {
+      nome: p.nome || '',
+      nascimento: '',
+      telefone: p.telefone || '',
+      email: '',
+      conselho: { sigla: p.conselho || '', numero: p.numero || '', uf: p.uf || '' },
+      ativo: p.ativo !== false,
+      acesso: { temLogin: false },
+      farmacia: { ativo: modulo === 'farmacia', funcao: 'auxiliar', rt: false },
+      enfermagem: {
+        ativo: modulo === 'enfermagem',
+        cargo: p.tipo === 'tecnico' ? 'Técnico(a) de Enfermagem' : 'Enfermeiro(a)',
+        setorPadrao: '',
+        rt: false
+      },
+      medico: { ativo: modulo === 'medico', especialidade: p.especialidade || '', rt: false },
+      migradoEm: serverTimestamp()
+    })
+    semAcesso++
+    if (++n >= 400) await comitar()
+  }
+
+  await comitar()
+  await registrarLog(
+    ctx, 'migracao-pessoas',
+    `${comAcesso} com acesso e ${semAcesso} sem acesso migrados para o cadastro único`
+  )
+  return { comAcesso, semAcesso }
+}

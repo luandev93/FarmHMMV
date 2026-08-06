@@ -29,7 +29,7 @@ export function ProvedorAuth ({ children }) {
     if (!usuario) return
     setCarregando(true)
     const parar = onSnapshot(
-      doc(db, 'usuarios', usuario.uid),
+      doc(db, 'pessoas', usuario.uid),
       snap => {
         setPerfil(snap.exists() ? { id: snap.id, ...snap.data() } : null)
         setCarregando(false)
@@ -39,7 +39,9 @@ export function ProvedorAuth ({ children }) {
     return parar
   }, [usuario])
 
-  const funcao = perfil?.ativo ? perfil.funcao : null
+  /* A função no estoque vem do módulo Farmácia; quem não participa dele
+     não opera o estoque, mesmo tendo acesso ao sistema. */
+  const funcao = perfil?.ativo && perfil?.farmacia?.ativo ? perfil.farmacia.funcao : null
 
   const valor = {
     usuario,
@@ -58,7 +60,7 @@ export function ProvedorAuth ({ children }) {
     },
     async salvarMeuPerfil (dados) {
       await setDoc(
-        doc(db, 'usuarios', usuario.uid),
+        doc(db, 'pessoas', usuario.uid),
         { ...dados, atualizadoEm: serverTimestamp() },
         { merge: true }
       )

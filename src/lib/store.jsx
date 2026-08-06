@@ -54,14 +54,12 @@ export function ProvedorDados ({ children }) {
       }),
       onSnapshot(query(collection(db, 'solicitacoes'), where('status', '==', 'pendente')),
         s => setPendentes(s.size), () => setPendentes(0)),
-      onSnapshot(collection(db, 'profissionais'), s => {
-        setProfissionais(
+
+      onSnapshot(collection(db, 'pessoas'), s => {
+        setUsuarios(
           s.docs.map(d => ({ id: d.id, ...d.data() }))
             .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
         )
-      }, () => setProfissionais([])),
-      onSnapshot(collection(db, 'usuarios'), s => {
-        setUsuarios(s.docs.map(d => ({ id: d.id, ...d.data() })))
       }, () => setUsuarios([])),
       onSnapshot(doc(db, 'config', 'app'), s => {
         setConfig(s.exists() ? { ...CONFIG_PADRAO, ...s.data() } : CONFIG_PADRAO)
@@ -97,30 +95,30 @@ export function ProvedorDados ({ children }) {
 
     /* Quem já tem acesso ao sistema não precisa ser cadastrado de novo como
        profissional: entra na lista de escolha a partir do próprio perfil. */
-    const tipoPeloPerfil = u => {
-      const cargo = u.enfermagem?.ativo ? u.enfermagem.cargo : ''
+    /* Uma pessoa pode ser prescritora e da enfermagem ao mesmo tempo.
+       A lista de escolha traduz os módulos em tipos, sem duplicar cadastro. */
+    const tipoPeloModulo = p => {
+      if (p.medico?.ativo) return 'prescritor'
+      const cargo = p.enfermagem?.ativo ? p.enfermagem.cargo : ''
       if (cargo.includes('Técnico')) return 'tecnico'
-      if (cargo.includes('Enfermeiro') || cargo.includes('Coordenador')) return 'enfermeiro'
-      if (u.funcao === 'farmaceutico' || u.funcao === 'adm') return 'farmaceutico'
-      if (cargo === 'Admin') return 'enfermeiro'
+      if (cargo) return 'enfermeiro'
+      if (p.farmacia?.ativo) return 'farmaceutico'
       return ''
     }
 
-    const daEquipe = usuarios
-      .filter(u => u.ativo !== false && tipoPeloPerfil(u))
-      .map(u => ({
-        id: 'usuario:' + u.id,
-        nome: u.nome,
-        tipo: tipoPeloPerfil(u),
-        conselho: (u.enfermagem?.coren || u.registro || '').split(' ')[0] || '',
-        numero: (u.enfermagem?.coren || u.registro || '').split(' ').slice(1).join(' '),
-        uf: '',
-        especialidade: u.enfermagem?.setorPadrao || '',
+    const paraEscolha = usuarios
+      .filter(p => p.ativo !== false && tipoPeloModulo(p))
+      .map(p => ({
+        id: p.id,
+        nome: p.nome,
+        tipo: tipoPeloModulo(p),
+        conselho: p.conselho?.sigla || '',
+        numero: p.conselho?.numero || '',
+        uf: p.conselho?.uf || '',
+        especialidade: p.medico?.especialidade || p.enfermagem?.setorPadrao || '',
         ativo: true,
-        temAcesso: true
+        temAcesso: Boolean(p.acesso?.temLogin)
       }))
-
-    const paraEscolha = [...daEquipe, ...profissionais]
       .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
 
     // Ações que cada local aceita. Local sem regra definida aceita todas.
@@ -160,7 +158,7 @@ export function ProvedorDados ({ children }) {
       saldos,
       lotes,
       usuarios,
-      profissionais,
+      pessoas: usuarios,
       paraEscolha,
       solicitacoesPendentes,
       config,

@@ -105,7 +105,21 @@ export const NOMES_FUNCAO = {
   adm: 'Administrador',
   farmaceutico: 'Farmacêutico',
   auxiliar: 'Auxiliar',
-  enfermagem: 'Enfermagem (solicita pelo app de plantão)'
+  enfermagem: 'Enfermagem'
+}
+
+/** Resume em texto os módulos de que a pessoa participa. */
+export function modulosDe (pessoa) {
+  return Object.entries(MODULOS)
+    .filter(([id]) => pessoa?.[id]?.ativo)
+    .map(([, nome]) => nome)
+}
+
+/** Registro profissional montado para exibição: "CRM 12345 PE". */
+export function registroDe (pessoa) {
+  const c = pessoa?.conselho
+  if (!c?.numero) return ''
+  return [c.sigla, c.numero, c.uf].filter(Boolean).join(' ')
 }
 
 /** Quem opera o estoque. A enfermagem fica de fora: ela só cria solicitações. */
@@ -155,7 +169,25 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.12'
+export const VERSAO = '2.0'
+
+/* =========================================================
+   Cadastro único de pessoas
+   Uma pessoa existe uma vez só. O que muda é de quais módulos
+   ela participa, e se tem ou não acesso ao sistema.
+   ========================================================= */
+
+export const MODULOS = {
+  farmacia: 'Farmácia',
+  enfermagem: 'Enfermagem',
+  medico: 'Corpo clínico'
+}
+
+export const FUNCOES_FARMACIA = {
+  adm: 'Administrador',
+  farmaceutico: 'Farmacêutico',
+  auxiliar: 'Auxiliar'
+}
 
 /** Domínio interno para quem não tem e-mail. Serve só como identificador de login. */
 export const DOMINIO_INTERNO = 'hmmv.local'

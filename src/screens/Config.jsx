@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
-import { salvarConfig, semear, sincronizarCatalogoPublico } from '../lib/db'
+import { salvarConfig, semear, sincronizarCatalogoPublico, migrarParaPessoas } from '../lib/db'
 
 export default function Config () {
   const { perfil, usuario } = useAuth()
@@ -12,6 +12,7 @@ export default function Config () {
   const [salvando, setSalvando] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
+  const [migrando, setMigrando] = useState(false)
 
   useEffect(() => { setF(dados.config) }, [dados.config])
 
@@ -151,6 +152,29 @@ export default function Config () {
           }
         }}
       >{salvando ? 'Salvando…' : 'Salvar configurações'}</button>
+
+      <div className="cartao" style={{ marginTop: 22 }}>
+        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Cadastro único de pessoas</h2>
+        <p className="dica" style={{ marginBottom: 12 }}>
+          Junta os antigos cadastros de usuários e de prescritores num só. Pode ser
+          executado mais de uma vez: nada é duplicado nem sobrescrito.
+        </p>
+        <button
+          className="btn secundario"
+          disabled={migrando}
+          onClick={async () => {
+            setMigrando(true)
+            try {
+              const r = await migrarParaPessoas(ctx)
+              avisar(`${r.comAcesso} com acesso e ${r.semAcesso} sem acesso migrados.`, 'ok')
+            } catch (e) {
+              avisar('Falhou: ' + e.message, 'erro')
+            } finally {
+              setMigrando(false)
+            }
+          }}
+        >{migrando ? 'Migrando…' : 'Migrar cadastros antigos'}</button>
+      </div>
 
       <div className="cartao" style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 15, marginBottom: 4 }}>Catálogo padrão</h2>

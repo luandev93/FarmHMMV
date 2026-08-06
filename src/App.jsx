@@ -12,9 +12,8 @@ import Inventario from './screens/Inventario'
 import Catalogo from './screens/Catalogo'
 import Auditoria from './screens/Auditoria'
 import Movimentacoes from './screens/Movimentacoes'
-import Usuarios from './screens/Usuarios'
+import Pessoas from './screens/Pessoas'
 import Locais from './screens/Locais'
-import Profissionais from './screens/Profissionais'
 import Solicitacoes from './screens/Solicitacoes'
 import Relatorios from './screens/Relatorios'
 import Config from './screens/Config'
@@ -34,8 +33,7 @@ const TELAS = {
   movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
   auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
   locais: { titulo: 'Locais de estoque', subtitulo: 'Regras de cada setor', comp: Locais },
-  profissionais: { titulo: 'Prescritores', subtitulo: 'Quem não tem acesso ao sistema', comp: Profissionais },
-  usuarios: { titulo: 'Pessoas', subtitulo: 'Acessos, cargos e aniversários', comp: Usuarios },
+  usuarios: { titulo: 'Pessoas', subtitulo: 'Cadastro único de toda a equipe', comp: Pessoas },
   config: { titulo: 'Configurações', subtitulo: '', comp: Config, exige: 'adm' },
   perfil: { titulo: 'Meu perfil', subtitulo: '', comp: Perfil }
 }
@@ -165,7 +163,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
   const { perfil } = useAuth()
   const dados = useDados()
 
-  const aniversariantes = dados.usuarios
+  const aniversariantes = dados.pessoas
     .map(u => ({ ...u, faltam: diasParaAniversario(u.nascimento) }))
     .filter(u => u.faltam !== null && u.faltam <= 7)
     .sort((a, b) => a.faltam - b.faltam)
@@ -173,7 +171,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
   const vencidos = dados.vencendo.filter(l => l.dias < 0)
 
   const opcoes = [
-    'movimentacoes', 'relatorios', 'inventario', 'catalogo', 'profissionais',
+    'movimentacoes', 'relatorios', 'inventario', 'catalogo',
     'auditoria', 'locais', 'usuarios', 'config', 'perfil'
   ]
     .filter(podeVer)
@@ -237,7 +235,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
           <button key={chave} className="menu-item" onClick={() => aoAbrir(chave)}>
             <Icone nome={{
               solicitacoes: 'pedido', movimentacoes: 'historico', inventario: 'inventario', catalogo: 'etiqueta',
-              profissionais: 'usuarios', auditoria: 'cadeado', locais: 'caixa',
+              auditoria: 'cadeado', locais: 'caixa',
               usuarios: 'usuarios', config: 'engrenagem', perfil: 'pessoa'
             }[chave]} />
             <span>
@@ -256,7 +254,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
             <tr><td>Itens no catálogo</td><td className="n">{formatarNumero(dados.itens.length)}</td></tr>
             <tr><td>Locais de estoque</td><td className="n">{formatarNumero(dados.estoques.length)}</td></tr>
             <tr><td>Lotes com saldo</td><td className="n">{formatarNumero(dados.lotes.length)}</td></tr>
-            <tr><td>Pessoas com acesso</td><td className="n">{formatarNumero(dados.usuarios.length)}</td></tr>
+            <tr><td>Pessoas cadastradas</td><td className="n">{formatarNumero(dados.pessoas.length)}</td></tr>
           </tbody>
         </table>
       </div>

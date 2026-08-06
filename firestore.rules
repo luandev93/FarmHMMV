@@ -4,18 +4,18 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function perfil() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+      return get(/databases/$(database)/documents/pessoas/$(request.auth.uid)).data;
     }
     function logado() {
       return request.auth != null;
     }
     function ativo() {
       return logado()
-        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/pessoas/$(request.auth.uid))
         && perfil().ativo == true;
     }
     function funcao() {
-      return ativo() ? perfil().funcao : 'nenhuma';
+      return (ativo() && perfil().farmacia.ativo) ? perfil().farmacia.funcao : 'nenhuma';
     }
     function ehAdm() { return funcao() == 'adm'; }
     function ehFarmaceutico() { return funcao() == 'adm' || funcao() == 'farmaceutico'; }
@@ -24,7 +24,19 @@ service cloud.firestore {
       return funcao() == 'adm' || funcao() == 'farmaceutico' || funcao() == 'auxiliar';
     }
 
-    // Perfis de usuário
+    // Cadastro único: a mesma pessoa em todos os módulos.
+    match /pessoas/{id} {
+      allow create: if ehAdm();
+      allow read:   if ativo() || (logado() && request.auth.uid == id);
+      allow update: if ehAdm()
+                    || (logado() && request.auth.uid == id
+                        && request.resource.data.farmacia == resource.data.farmacia
+                        && request.resource.data.enfermagem.ativo == resource.data.enfermagem.ativo
+                        && request.resource.data.ativo == resource.data.ativo);
+      allow delete: if ehAdm();
+    }
+
+    // Modelo anterior: mantido só para a migração ler os dados.
     match /usuarios/{uid} {
       // Não existe autocadastro: só o administrador libera acesso a alguém.
       allow create: if ehAdm();
