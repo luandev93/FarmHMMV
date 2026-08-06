@@ -88,6 +88,22 @@ export function ProvedorDados ({ children }) {
     const saldoTotal = itemId =>
       estoques.reduce((s, e) => s + saldoDe(e.id, itemId), 0)
 
+    /* O estoque mínimo agora vive em cada local, na lista de itens padrão do
+       setor. O número do item é a soma — assim existe um lugar só para manter. */
+    const minimoNoLocal = (estoqueId, itemId) => {
+      const e = estoques.find(x => x.id === estoqueId)
+      return Number(e?.itensPadrao?.[itemId]) || 0
+    }
+
+    const minimoDoItem = itemId =>
+      estoques.reduce((s, e) => s + (Number(e.itensPadrao?.[itemId]) || 0), 0)
+
+    /** De onde vem o mínimo, para mostrar a composição na tela. */
+    const composicaoDoMinimo = itemId =>
+      estoques
+        .map(e => ({ estoque: e, minimo: Number(e.itensPadrao?.[itemId]) || 0 }))
+        .filter(x => x.minimo > 0)
+
     const lotesDe = (estoqueId, itemId) =>
       lotes.filter(l => l.estoqueId === estoqueId && l.itemId === itemId && l.qtd > 0)
 
@@ -140,9 +156,19 @@ export function ProvedorDados ({ children }) {
 
     const abaixoDoMinimo = itensOrdenados.filter(i => {
       if (i.pendente) return false
-      const min = Number(i.estoqueMinimo) || 0
+      const min = minimoDoItem(i.id)
       return min > 0 && saldoTotal(i.id) < min
     })
+
+    /** Setores onde o item está abaixo do padrão definido para o local. */
+    const faltaNosSetores = itemId =>
+      estoques
+        .map(e => ({
+          estoque: e,
+          minimo: Number(e.itensPadrao?.[itemId]) || 0,
+          saldo: saldoDe(e.id, itemId)
+        }))
+        .filter(x => x.minimo > 0 && x.saldo < x.minimo)
 
     const vencendo = lotes
       .filter(l => l.validade && l.qtd > 0)
@@ -168,6 +194,10 @@ export function ProvedorDados ({ children }) {
       lotesDe,
       itemPorId,
       itensPendentes,
+      minimoNoLocal,
+      minimoDoItem,
+      composicaoDoMinimo,
+      faltaNosSetores,
       acoesDe,
       destinosDe,
       abaixoDoMinimo,

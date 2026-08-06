@@ -1642,3 +1642,45 @@ export async function importarEmprestimos (linhas, itens, ctx) {
   await registrarLog(ctx, 'emprestimos-importados', `${criados} pendência(s) de empréstimo importadas`)
   return { criados, semItem }
 }
+
+/* =========================================================
+   Itens padrão de cada setor
+   ========================================================= */
+
+/** Grava a lista de itens padrão de um local, com o mínimo de cada um. */
+export async function salvarItensPadrao (estoqueId, itensPadrao, ctx) {
+  const limpo = {}
+  Object.entries(itensPadrao || {}).forEach(([id, qtd]) => {
+    const n = Number(qtd)
+    if (n > 0) limpo[id] = n
+  })
+  await setDoc(doc(db, 'estoques', estoqueId), { itensPadrao: limpo }, { merge: true })
+  if (ctx) {
+    await registrarLog(
+      ctx, 'itens-padrao',
+      `${Object.keys(limpo).length} item(ns) padrão definidos`,
+      'estoques', estoqueId
+    )
+  }
+}
+
+/**
+ * Leva os mínimos antigos, que ficavam soltos no item, para um local.
+ * Roda uma vez: depois disso o número do catálogo passa a ser só a soma.
+ */
+export async function migrarMinimosParaLocal (estoqueId, ctx) {
+  const snap = await getDocs(collection(db, 'itens'))
+  const padrao = {}
+  let n = 0
+  snap.docs.forEach(d => {
+    const m = Number(d.data().estoqueMinimo) || 0
+    if (m > 0) { padrao[d.id] = m; n++ }
+  })
+  if (!n) return 0
+
+  const atual = await getDoc(doc(db, 'estoques', estoqueId))
+  await salvarItensPadrao(estoqueId, { ...(atual.data()?.itensPadrao || {}), ...padrao }, ctx)
+  await setDoc(doc(db, 'config', 'app'), { minimosMigrados: true }, { merge: true })
+  await registrarLog(ctx, 'minimos-migrados', `${n} mínimo(s) movidos para o local`)
+  return n
+}

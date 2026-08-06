@@ -148,6 +148,7 @@ export default function Pessoas () {
 
       {editando && (
         <Formulario
+          key={editando.id || 'novo'}
           pessoa={editando}
           souEu={editando.id === usuario.uid}
           criadoPor={perfil.nome}
@@ -343,8 +344,13 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
 
         <Modulo
           titulo="Farmácia" ativo={f.farmacia.ativo}
-          aoAtivar={v => trocaModulo('farmacia', 'ativo', v)}
-          descricao="Opera o estoque: movimenta, consulta e, conforme a função, administra."
+          aoAtivar={v => { if (!souEu) trocaModulo('farmacia', 'ativo', v) }}
+          descricao={
+            souEu
+              ? 'Você não pode desligar o seu próprio acesso à farmácia.'
+              : 'Opera o estoque: movimenta, consulta e, conforme a função, administra.'
+          }
+          travado={souEu}
         >
           <div>
             <label className="rotulo">Função</label>
@@ -494,7 +500,7 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
   )
 }
 
-function Modulo ({ titulo, descricao, ativo, aoAtivar, children }) {
+function Modulo ({ titulo, descricao, ativo, aoAtivar, travado, children }) {
   return (
     <div
       style={{
@@ -506,8 +512,9 @@ function Modulo ({ titulo, descricao, ativo, aoAtivar, children }) {
     >
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
         <input
-          type="checkbox" checked={Boolean(ativo)} onChange={e => aoAtivar(e.target.checked)}
-          style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none' }}
+          type="checkbox" checked={Boolean(ativo)} disabled={travado}
+          onChange={e => aoAtivar(e.target.checked)}
+          style={{ width: 22, height: 22, accentColor: 'var(--azul-600)', flex: 'none', opacity: travado ? .6 : 1 }}
         />
         <span>
           <b>{titulo}</b>

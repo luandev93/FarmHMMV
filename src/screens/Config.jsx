@@ -157,8 +157,10 @@ export default function Config () {
       <div className="cartao" style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 15, marginBottom: 4 }}>Cadastro único de pessoas</h2>
         <p className="dica" style={{ marginBottom: 12 }}>
-          Junta os antigos cadastros de usuários e de prescritores num só. Pode ser
-          executado mais de uma vez: nada é duplicado nem sobrescrito.
+          Traz para Pessoas quem ainda está só nos cadastros antigos de usuário ou de
+          prescritor. Rode uma vez; execuções seguintes não duplicam. Se uma pessoa já
+          existia nos dois cadastros antigos, ela pode aparecer duas vezes aqui — nesse
+          caso, edite a duplicada sem acesso e a exclua.
         </p>
         <button
           className="btn secundario"
