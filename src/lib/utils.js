@@ -155,7 +155,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.11'
+export const VERSAO = '1.12'
 
 /** Domínio interno para quem não tem e-mail. Serve só como identificador de login. */
 export const DOMINIO_INTERNO = 'hmmv.local'

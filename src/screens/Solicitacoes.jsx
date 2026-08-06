@@ -82,6 +82,9 @@ export default function Solicitacoes () {
                     <span className={'etq ' + (s.status === 'pendente' ? 'atencao' : s.status === 'recusada' ? 'alerta' : 'ok')}>
                       {SITUACOES_SOLICITACAO[s.status] || s.status}
                     </span>
+                    <span className="etq">
+                      {s.paraConsumo === false ? 'reposição' : 'consumo'}
+                    </span>
                     <span>{itens} item(ns)</span>
                     {temControlado && <span className="etq controle">controlado</span>}
                     <span>{dataHora(s.criadoEm)}</span>
@@ -172,7 +175,9 @@ function DetalheSolicitacao ({ solicitacao, dispensacao, aoAtender, aoRecusar, a
             className="btn" disabled={ocupado || !dispensacao}
             title={dispensacao ? '' : 'Defina a farmácia de dispensação em Configurações'}
             onClick={() => executar(() => aoAtender(linhas, observacao))}
-          >{ocupado ? 'Baixando…' : 'Atender e baixar'}</button>
+          >{ocupado
+              ? 'Gravando…'
+              : solicitacao.paraConsumo === false ? 'Atender e transferir' : 'Atender e baixar'}</button>
         </>
       )}
     >
@@ -215,6 +220,13 @@ function DetalheSolicitacao ({ solicitacao, dispensacao, aoAtender, aoRecusar, a
             </div>
           )}
         </dl>
+      )}
+
+      {solicitacao.paraConsumo === false && (
+        <div className="info-caixa" style={{ marginTop: 16 }}>
+          Pedido de <b>reposição</b>: ao liberar, os itens são transferidos para o estoque
+          de {solicitacao.setor}, e a baixa acontece lá quando forem usados.
+        </div>
       )}
 
       <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>

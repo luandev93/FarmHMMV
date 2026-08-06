@@ -918,6 +918,8 @@ const enxugar = item => ({
   tipo: item.tipo || '',
   principioAtivo: item.principioAtivo || '',
   controlado: item.controlado || '',
+  exigePaciente: Boolean(item.exigePaciente),
+  consumoInterno: Boolean(item.consumoInterno),
   ativo: item.ativo !== false
 })
 
@@ -984,16 +986,31 @@ export async function atenderSolicitacao (solicitacao, linhasAtendidas, ctx, opc
   if (!aBaixar.length) throw new Error('Nenhuma quantidade foi liberada. Use "Recusar" se for o caso.')
 
   // Controlado exige paciente e prescritor identificados, mesmo que o pedido tenha vindo sem.
-  const controladoSemDados = aBaixar.some(l => l.controlado) &&
-    (!solicitacao.pacienteNome || !solicitacao.prescritorNome)
-  if (controladoSemDados) {
-    throw new Error('Há item de controle especial sem paciente ou prescritor informado. Recuse e peça o reenvio.')
+  const exigeIdentificacao = aBaixar.some(l => l.controlado || l.exigePaciente) &&
+    !aBaixar.every(l => l.consumoInterno)
+  if (solicitacao.paraConsumo !== false && exigeIdentificacao &&
+      (!solicitacao.pacienteNome || !solicitacao.prescritorNome)) {
+    throw new Error('Há item que exige paciente e prescritor identificados. Recuse e peça o reenvio.')
+  }
+
+  /* Quando a enfermagem não marcou "será consumido", o item não sai do hospital:
+     ele muda de lugar, do estoque da farmácia para o do setor. */
+  const paraConsumo = solicitacao.paraConsumo !== false
+  const destino = solicitacao.setorEstoqueId
+
+  if (!paraConsumo && !destino) {
+    throw new Error(
+      'A solicitação pede reposição de estoque, mas o setor não está vinculado a um local. ' +
+      'Vincule em Mais › Locais de estoque.'
+    )
   }
 
   const lancamentos = aBaixar.map(l => ({
-    tipo: 'consumo',
+    tipo: paraConsumo ? 'consumo' : 'transferencia',
     estoqueId,
     estoqueNome: opcoes.estoqueNome || '',
+    estoqueDestinoId: paraConsumo ? null : destino,
+    estoqueDestinoNome: paraConsumo ? null : (solicitacao.setor || ''),
     itemId: l.itemId,
     itemCodigo: l.codigo,
     itemDescricao: l.descricao,
@@ -1001,7 +1018,7 @@ export async function atenderSolicitacao (solicitacao, linhasAtendidas, ctx, opc
     itemTipo: l.tipo || '',
     itemControlado: l.controlado || '',
     qtd: Number(l.qtdAtendida),
-    finalidade: solicitacao.pacienteNome ? 'paciente' : 'interno',
+    finalidade: paraConsumo ? (solicitacao.pacienteNome ? 'paciente' : 'interno') : '',
     pacienteNome: solicitacao.pacienteNome || '',
     pacienteCPF: solicitacao.pacienteCPF || '',
     prescritorNome: solicitacao.prescritorNome || '',
@@ -1009,7 +1026,7 @@ export async function atenderSolicitacao (solicitacao, linhasAtendidas, ctx, opc
     responsavelNome: solicitacao.solicitanteNome || '',
     responsavelConselho: solicitacao.solicitanteConselho || '',
     destinoInterno: solicitacao.setor || '',
-    motivo: 'Solicitação da enfermagem',
+    motivo: paraConsumo ? 'Solicitação da enfermagem' : 'Reposição de estoque do setor',
     observacao: [solicitacao.observacao, opcoes.observacao].filter(Boolean).join(' · ')
   }))
 

@@ -3,7 +3,7 @@ import { Confirmar, Icone, Painel, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import { salvarEstoque, excluirEstoque } from '../lib/db'
-import { ACOES_ESTOQUE, ACOES_PADRAO, formatarNumero } from '../lib/utils'
+import { ACOES_ESTOQUE, ACOES_PADRAO, SETORES_ENFERMAGEM, formatarNumero } from '../lib/utils'
 
 export default function Locais () {
   const { perfil, usuario, ehAdm } = useAuth()
@@ -49,6 +49,7 @@ export default function Locais () {
               <div className="meta">
                 {e.descricao && <span>{e.descricao}</span>}
                 {e.ativo === false && <span className="etq alerta">desativado</span>}
+                {e.setorEnfermagem && <span className="etq ok">{e.setorEnfermagem}</span>}
                 {Array.isArray(e.acoes) && e.acoes.length > 0 && e.acoes.length < 4 && (
                   <span className="etq">
                     {e.acoes.map(a => ACOES_ESTOQUE[a]).filter(Boolean).join(' · ')}
@@ -139,6 +140,21 @@ function FormularioLocal ({ local, aoSalvar, aoFechar, aoExcluir }) {
           <label className="rotulo">Descrição</label>
           <input className="campo" value={f.descricao || ''} onChange={e => troca('descricao', e.target.value)} />
         </div>
+        <div>
+          <label className="rotulo">Setor da enfermagem atendido por este local</label>
+          <select
+            className="campo" value={f.setorEnfermagem || ''}
+            onChange={e => troca('setorEnfermagem', e.target.value)}
+          >
+            <option value="">Nenhum</option>
+            {SETORES_ENFERMAGEM.map(x => <option key={x} value={x}>{x}</option>)}
+          </select>
+          <p className="dica" style={{ marginTop: 5 }}>
+            Quando a enfermagem pedir reposição em vez de consumo, o item é transferido
+            para cá.
+          </p>
+        </div>
+
         <div>
           <label className="rotulo">Ordem na lista</label>
           <input

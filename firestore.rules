@@ -45,7 +45,8 @@ service cloud.firestore {
 
     // Locais de estoque
     match /estoques/{id} {
-      allow read: if operacional();
+      // A enfermagem também lê: precisa saber para qual setor o item vai.
+      allow read: if ativo();
       allow write: if ehAdm();
     }
 

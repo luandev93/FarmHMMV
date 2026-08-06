@@ -18,7 +18,8 @@ const VAZIO = {
   termolabil: false, altaVigilancia: false, controlaLote: true,
   precoMin: null, precoMax: null, precoContrato: null,
   marca: '', fornecedor: '', contrato: '', codigoContrato: '',
-  estoqueMinimo: 0, ativo: true, foraDoContrato: false
+  estoqueMinimo: 0, ativo: true, foraDoContrato: false,
+  exigePaciente: false, consumoInterno: false
 }
 
 export default function Catalogo () {
@@ -613,6 +614,14 @@ function FormularioItem ({
             <Marcador rotulo="Guardar entre 2 e 8 °C" valor={f.termolabil} aoTrocar={v => troca('termolabil', v)} />
             <Marcador rotulo="Medicamento de alta vigilância" valor={f.altaVigilancia} aoTrocar={v => troca('altaVigilancia', v)} />
             <Marcador rotulo="Controlar lote e validade" valor={f.controlaLote} aoTrocar={v => troca('controlaLote', v)} />
+            <Marcador
+              rotulo="Exige paciente e prescritor na dispensação"
+              valor={f.exigePaciente} aoTrocar={v => troca('exigePaciente', v)}
+            />
+            <Marcador
+              rotulo="Consumo interno (nunca sai em nome de paciente)"
+              valor={f.consumoInterno} aoTrocar={v => troca('consumoInterno', v)}
+            />
             <Marcador rotulo="Item fora do contrato" valor={f.foraDoContrato} aoTrocar={v => troca('foraDoContrato', v)} />
             <Marcador rotulo="Item ativo (aparece na busca)" valor={f.ativo !== false} aoTrocar={v => troca('ativo', v)} />
           </div>
