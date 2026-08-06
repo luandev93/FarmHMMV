@@ -16,6 +16,7 @@ import Pessoas from './screens/Pessoas'
 import Locais from './screens/Locais'
 import Solicitacoes from './screens/Solicitacoes'
 import Relatorios from './screens/Relatorios'
+import Emprestimos from './screens/Emprestimos'
 import Config from './screens/Config'
 import Perfil from './screens/Perfil'
 
@@ -29,7 +30,8 @@ const TELAS = {
   inventario: { titulo: 'Inventário', subtitulo: 'Contagem que substitui o saldo', comp: Inventario, exige: 'farmaceutico' },
   catalogo: { titulo: 'Catálogo', subtitulo: 'Itens, categorias e estoque mínimo', comp: Catalogo, exige: 'farmaceutico' },
   solicitacoes: { titulo: 'Requisições', subtitulo: 'Pedidos vindos da enfermagem', icone: 'solicitacoes', comp: Solicitacoes },
-  relatorios: { titulo: 'Curva ABC', subtitulo: 'Classificação por valor e previsibilidade', comp: Relatorios, exige: 'farmaceutico' },
+  relatorios: { titulo: 'Relatórios', subtitulo: 'Estoque por período, curva ABC', comp: Relatorios, exige: 'farmaceutico' },
+  emprestimos: { titulo: 'Empréstimos', subtitulo: 'O que devemos e o que nos devem', comp: Emprestimos },
   movimentacoes: { titulo: 'Movimentações', subtitulo: 'Histórico com filtros e exportação', comp: Movimentacoes },
   auditoria: { titulo: 'Auditoria', subtitulo: 'Registro das ações no sistema', comp: Auditoria, exige: 'farmaceutico' },
   locais: { titulo: 'Locais de estoque', subtitulo: 'Regras de cada setor', comp: Locais },
@@ -174,7 +176,7 @@ function Mais ({ aoAbrir, podeVer, aoSair }) {
   const vencidos = dados.vencendo.filter(l => l.dias < 0)
 
   const opcoes = [
-    'movimentacoes', 'relatorios', 'inventario', 'catalogo',
+    'movimentacoes', 'relatorios', 'emprestimos', 'inventario', 'catalogo',
     'auditoria', 'locais', 'usuarios', 'config', 'perfil'
   ]
     .filter(podeVer)

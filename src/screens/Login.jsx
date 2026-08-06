@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { configurado } from '../firebase'
 import { useAuth, traduzirErro } from '../lib/auth'
 import { Icone } from '../components/ui'
-import { completarLogin } from '../lib/utils'
+import { VERSAO, completarLogin } from '../lib/utils'
 
 export default function Login () {
   const { entrar, recuperarSenha } = useAuth()
@@ -97,6 +97,10 @@ export default function Login () {
           {modo === 'entrar' ? 'Esqueci minha senha' : 'Voltar para a entrada'}
         </button>
       </form>
+
+      <p style={{ textAlign: 'center', color: 'var(--azul-200)', fontSize: 12, marginTop: 22 }}>
+        versão {VERSAO} · {new Date().getFullYear()}
+      </p>
     </div>
   )
 }

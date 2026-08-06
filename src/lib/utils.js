@@ -183,7 +183,56 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.13'
+export const VERSAO = '1.14'
+
+/* =========================================================
+   Relatório de estoque por período
+   ========================================================= */
+
+export const CONTEUDOS_PERIODO = {
+  saldo: 'Saldo no fim do mês',
+  consumo: 'Consumo',
+  entradas: 'Entradas',
+  descartes: 'Descartes',
+  recebidas: 'Transferências recebidas',
+  enviadas: 'Transferências enviadas',
+  valor: 'Valor consumido',
+  tudo: 'Tudo (uma coluna para cada)'
+}
+
+/* =========================================================
+   Empréstimos entre unidades
+   ========================================================= */
+
+export const SENTIDOS_EMPRESTIMO = {
+  devemos: 'Devemos',
+  devem: 'Nos devem'
+}
+
+export const SITUACOES_EMPRESTIMO = {
+  aberto: 'Em aberto',
+  parcial: 'Devolvido em parte',
+  quitado: 'Quitado'
+}
+
+/** Lista dos meses entre duas datas, no formato AAAA-MM. */
+export function mesesEntre (inicio, fim) {
+  const saida = []
+  const a = new Date(inicio + 'T12:00:00')
+  const b = new Date(fim + 'T12:00:00')
+  a.setDate(1)
+  while (a <= b) {
+    saida.push(`${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, '0')}`)
+    a.setMonth(a.getMonth() + 1)
+  }
+  return saida
+}
+
+export function nomeDoMes (chave) {
+  const [ano, mes] = chave.split('-')
+  const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+  return `${nomes[Number(mes) - 1]}/${ano.slice(2)}`
+}
 
 /* =========================================================
    Cadastro único de pessoas

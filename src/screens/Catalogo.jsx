@@ -18,7 +18,7 @@ const VAZIO = {
   termolabil: false, altaVigilancia: false, controlaLote: true,
   precoMin: null, precoMax: null, precoContrato: null,
   marca: '', fornecedor: '', contrato: '', codigoContrato: '',
-  estoqueMinimo: 0, ativo: true, foraDoContrato: false,
+  estoqueMinimo: 0, ativo: true, foraDoContrato: false, padronizado: true,
   exigePaciente: false, consumoInterno: false
 }
 
@@ -46,6 +46,8 @@ export default function Catalogo () {
     return dados.itens.filter(i => {
       if (tipo === 'pendentes') return Boolean(i.pendente)
       if (i.pendente) return false
+      if (tipo === 'naoPadronizado') return i.padronizado === false
+      if (tipo === 'foraContrato') return Boolean(i.foraDoContrato)
       if (tipo && i.tipo !== tipo) return false
       if (!t) return true
       return semAcento(
@@ -107,6 +109,12 @@ export default function Catalogo () {
             {nome}
           </button>
         ))}
+        <button className="pilula" aria-pressed={tipo === 'naoPadronizado'} onClick={() => setTipo('naoPadronizado')}>
+          Não padronizados
+        </button>
+        <button className="pilula" aria-pressed={tipo === 'foraContrato'} onClick={() => setTipo('foraContrato')}>
+          Fora do contrato
+        </button>
       </div>
 
       {ehFarmaceutico && (
@@ -183,6 +191,7 @@ export default function Catalogo () {
                 {i.ativo === false && <span className="etq alerta">inativo</span>}
                 {i.pendente && <span className="etq atencao">aguardando aprovação</span>}
                 {i.foraDoContrato && <span className="etq atencao">fora do contrato</span>}
+                {i.padronizado === false && <span className="etq">não padronizado</span>}
                 {Number(i.estoqueMinimo) > 0 && <span>mín. {i.estoqueMinimo}</span>}
               </div>
             </div>
@@ -623,6 +632,10 @@ function FormularioItem ({
               valor={f.consumoInterno} aoTrocar={v => troca('consumoInterno', v)}
             />
             <Marcador rotulo="Item fora do contrato" valor={f.foraDoContrato} aoTrocar={v => troca('foraDoContrato', v)} />
+            <Marcador
+              rotulo="Item padronizado pela unidade"
+              valor={f.padronizado !== false} aoTrocar={v => troca('padronizado', v)}
+            />
             <Marcador rotulo="Item ativo (aparece na busca)" valor={f.ativo !== false} aoTrocar={v => troca('ativo', v)} />
           </div>
 

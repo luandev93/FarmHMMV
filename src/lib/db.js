@@ -1452,3 +1452,193 @@ export async function marcarSenhaProvisoria (pessoaId, ctx) {
   await setDoc(doc(db, 'pessoas', pessoaId), { senhaProvisoria: true }, { merge: true })
   await registrarLog(ctx, 'senha-redefinida', 'Senha provisória definida', 'pessoas', pessoaId)
 }
+
+/* =========================================================
+   Empréstimos entre unidades
+   ========================================================= */
+
+export function assinarEmprestimos (aoReceber, aoFalhar) {
+  return onSnapshot(
+    query(collection(db, 'emprestimos'), orderBy('criadoEm', 'desc'), limit(500)),
+    s => aoReceber(s.docs.map(d => ({ id: d.id, ...d.data() }))),
+    e => aoFalhar && aoFalhar(e)
+  )
+}
+
+/**
+ * Registra um empréstimo.
+ * `devemos` = pegamos emprestado, então o item entra no nosso saldo.
+ * `devem`   = emprestamos, então o item sai.
+ * Com `semMovimento`, apenas a pendência é criada — é o caso da carga
+ * inicial, quando o item já trocou de mãos antes de existir o sistema.
+ */
+export async function registrarEmprestimo (dados, ctx, { semMovimento = false } = {}) {
+  const qtd = Number(dados.qtd)
+  if (!(qtd > 0)) throw new Error('Informe uma quantidade maior que zero.')
+  if (!dados.unidade?.trim()) throw new Error('Informe a unidade.')
+
+  let movimentoTipo = ''
+  if (!semMovimento) {
+    movimentoTipo = dados.sentido === 'devemos' ? 'entrada' : 'consumo'
+    await salvarLancamentos([{
+      tipo: movimentoTipo,
+      estoqueId: dados.estoqueId,
+      estoqueNome: dados.estoqueNome || '',
+      itemId: dados.itemId,
+      itemCodigo: dados.itemCodigo,
+      itemDescricao: dados.itemDescricao,
+      itemUnidade: dados.itemUnidade,
+      itemTipo: dados.itemTipo || '',
+      itemControlado: dados.itemControlado || '',
+      qtd,
+      lote: dados.lote || '',
+      validade: dados.validade || null,
+      motivo: dados.sentido === 'devemos' ? 'Empréstimo recebido' : 'Empréstimo concedido',
+      observacao: `${dados.sentido === 'devemos' ? 'De' : 'Para'} ${dados.unidade}`,
+      finalidade: 'interno',
+      destinoInterno: dados.unidade
+    }], ctx, { permitirNegativo: false })
+  }
+
+  const ref = await addDoc(collection(db, 'emprestimos'), {
+    sentido: dados.sentido,
+    unidade: dados.unidade.trim(),
+    itemId: dados.itemId,
+    itemCodigo: dados.itemCodigo,
+    itemDescricao: dados.itemDescricao,
+    itemUnidade: dados.itemUnidade,
+    estoqueId: dados.estoqueId || '',
+    estoqueNome: dados.estoqueNome || '',
+    qtd,
+    qtdQuitada: 0,
+    situacao: 'aberto',
+    dataPrevista: dados.dataPrevista || null,
+    observacao: dados.observacao || '',
+    cargaInicial: semMovimento,
+    criadoPor: ctx.nome,
+    criadoEm: serverTimestamp()
+  })
+
+  await registrarLog(
+    ctx, 'emprestimo-registrado',
+    `${SENTIDO_TEXTO[dados.sentido]} ${qtd} × ${dados.itemDescricao} · ${dados.unidade}` +
+    (semMovimento ? ' (carga inicial, sem movimentar estoque)' : ''),
+    'emprestimos', ref.id
+  )
+  return ref.id
+}
+
+const SENTIDO_TEXTO = { devemos: 'Devemos', devem: 'Nos devem' }
+
+/** Quita, no todo ou em parte, movimentando o estoque no sentido inverso. */
+export async function quitarEmprestimo (emprestimo, quantidade, ctx, opcoes = {}) {
+  const qtd = Number(quantidade)
+  const restante = emprestimo.qtd - (emprestimo.qtdQuitada || 0)
+  if (!(qtd > 0)) throw new Error('Informe a quantidade devolvida.')
+  if (qtd > restante) throw new Error(`Restam apenas ${restante} para quitar.`)
+
+  const estoqueId = opcoes.estoqueId || emprestimo.estoqueId
+  if (!estoqueId) throw new Error('Escolha o local do estoque.')
+
+  await salvarLancamentos([{
+    // Devolvendo o que pegamos: sai. Recebendo o que emprestamos: entra.
+    tipo: emprestimo.sentido === 'devemos' ? 'consumo' : 'entrada',
+    estoqueId,
+    estoqueNome: opcoes.estoqueNome || emprestimo.estoqueNome || '',
+    itemId: emprestimo.itemId,
+    itemCodigo: emprestimo.itemCodigo,
+    itemDescricao: emprestimo.itemDescricao,
+    itemUnidade: emprestimo.itemUnidade,
+    qtd,
+    motivo: emprestimo.sentido === 'devemos' ? 'Devolução de empréstimo' : 'Empréstimo devolvido',
+    observacao: `${emprestimo.sentido === 'devemos' ? 'Para' : 'De'} ${emprestimo.unidade}`,
+    finalidade: 'interno',
+    destinoInterno: emprestimo.unidade
+  }], ctx, { permitirNegativo: false })
+
+  const quitada = (emprestimo.qtdQuitada || 0) + qtd
+  await updateDoc(doc(db, 'emprestimos', emprestimo.id), {
+    qtdQuitada: quitada,
+    situacao: quitada >= emprestimo.qtd ? 'quitado' : 'parcial',
+    atualizadoEm: serverTimestamp()
+  })
+
+  await registrarLog(
+    ctx, 'emprestimo-quitado',
+    `${qtd} × ${emprestimo.itemDescricao} · ${emprestimo.unidade}` +
+    (quitada >= emprestimo.qtd ? ' — quitado' : ` — restam ${emprestimo.qtd - quitada}`),
+    'emprestimos', emprestimo.id
+  )
+}
+
+export async function excluirEmprestimo (emprestimo, ctx) {
+  await deleteDoc(doc(db, 'emprestimos', emprestimo.id))
+  await registrarLog(
+    ctx, 'emprestimo-excluido',
+    `${emprestimo.itemDescricao} · ${emprestimo.unidade}`,
+    'emprestimos', emprestimo.id
+  )
+}
+
+/** Carga inicial por planilha: só cria as pendências, sem mexer no saldo. */
+export async function importarEmprestimos (linhas, itens, ctx) {
+  const porCodigo = {}
+  itens.forEach(i => { porCodigo[String(i.codigo).toUpperCase()] = i })
+
+  const cabecalho = linhas[0].map(h =>
+    String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  )
+  const posicao = nomes => cabecalho.findIndex(h => nomes.includes(h))
+  const cCodigo = posicao(['codigo', 'cod'])
+  const cDescricao = posicao(['descricao', 'item'])
+  const cQtd = posicao(['quantidade', 'qtd'])
+  const cUnidade = posicao(['unidade credora', 'credor', 'unidade', 'hospital'])
+  const cData = posicao(['data', 'data do emprestimo'])
+
+  if (cQtd < 0 || cUnidade < 0) {
+    throw new Error('A planilha precisa das colunas Quantidade e Unidade credora.')
+  }
+
+  let lote = writeBatch(db)
+  let n = 0
+  let criados = 0
+  const semItem = []
+
+  for (let k = 1; k < linhas.length; k++) {
+    const linha = linhas[k]
+    const codigo = cCodigo >= 0 ? String(linha[cCodigo] || '').trim().toUpperCase() : ''
+    const descricao = cDescricao >= 0 ? String(linha[cDescricao] || '').trim() : ''
+    const qtd = Number(String(linha[cQtd] || '').replace(',', '.'))
+    const unidade = String(linha[cUnidade] || '').trim()
+    if (!(qtd > 0) || !unidade) continue
+
+    const item = porCodigo[codigo]
+    if (!item && !descricao) { semItem.push(k + 1); continue }
+
+    lote.set(doc(collection(db, 'emprestimos')), {
+      sentido: 'devemos',
+      unidade,
+      itemId: item?.id || '',
+      itemCodigo: item?.codigo || codigo,
+      itemDescricao: item?.descricao || descricao,
+      itemUnidade: item?.unidade || 'UNIDADE',
+      estoqueId: '',
+      estoqueNome: '',
+      qtd,
+      qtdQuitada: 0,
+      situacao: 'aberto',
+      dataPrevista: null,
+      observacao: cData >= 0 ? `Emprestado em ${linha[cData]}` : '',
+      cargaInicial: true,
+      semVinculo: !item,
+      criadoPor: ctx.nome,
+      criadoEm: serverTimestamp()
+    })
+    criados++
+    if (++n >= 400) { await lote.commit(); lote = writeBatch(db); n = 0 }
+  }
+  if (n) await lote.commit()
+
+  await registrarLog(ctx, 'emprestimos-importados', `${criados} pendência(s) de empréstimo importadas`)
+  return { criados, semItem }
+}

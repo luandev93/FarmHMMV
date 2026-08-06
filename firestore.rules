@@ -114,6 +114,13 @@ service cloud.firestore {
       allow delete: if ehAdm();
     }
 
+    // Empréstimos entre unidades
+    match /emprestimos/{id} {
+      allow read: if operacional();
+      allow create, update: if ehFarmaceutico();
+      allow delete: if ehAdm();
+    }
+
     // Auditoria: somente farmacêutico e adm leem
     match /logs/{id} {
       allow read:   if ehFarmaceutico();

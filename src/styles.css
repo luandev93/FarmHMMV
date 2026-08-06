@@ -592,3 +592,55 @@ select.campo {
   text-decoration: underline; cursor: pointer; padding: 8px; align-self: center;
 }
 .tela-login .btn { background: var(--branco); color: var(--azul-800); }
+
+
+/* =========================================================
+   Impressão e PDF
+   O navegador oferece "Salvar como PDF" na mesma caixa de impressão,
+   e é de lá que sai o compartilhamento no celular.
+   ========================================================= */
+
+.tabela-larga { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tabela-larga table { min-width: 100%; }
+.tabela-larga th:first-child,
+.tabela-larga td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--branco);
+  min-width: 190px;
+  box-shadow: 1px 0 0 var(--borda);
+}
+
+.cabecalho-impressao { display: none; }
+
+@media print {
+  @page { size: landscape; margin: 12mm; }
+
+  body { background: #fff; }
+  .topo, .nav, .barra-salvar, .pilulas, .btn, .aviso { display: none !important; }
+  .app { padding: 0 !important; }
+  .conteudo { padding: 0 !important; max-width: none !important; }
+  .cartao { border: 0; box-shadow: none; padding: 0; }
+
+  .cabecalho-impressao {
+    display: block;
+    border-bottom: 2px solid var(--tinta);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .cabecalho-impressao h1 { font-size: 15pt; }
+  .cabecalho-impressao p { font-size: 9pt; color: #444; margin-top: 3px; }
+
+  .tabela-larga { overflow: visible; }
+  .tabela-larga th:first-child,
+  .tabela-larga td:first-child { position: static; box-shadow: none; }
+  .tabela { font-size: 8pt; }
+  .tabela th { border-bottom: 1px solid #000; }
+  .tabela td { border-bottom: 1px solid #ddd; }
+  .tabela tr { break-inside: avoid; }
+
+  .nao-imprimir { display: none !important; }
+  .rodape-impressao { display: block; margin-top: 14px; font-size: 8pt; color: #555; }
+}
+
+.rodape-impressao { display: none; }
