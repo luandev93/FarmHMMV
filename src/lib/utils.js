@@ -155,7 +155,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.10'
+export const VERSAO = '1.11'
 
 /** Domínio interno para quem não tem e-mail. Serve só como identificador de login. */
 export const DOMINIO_INTERNO = 'hmmv.local'
@@ -374,6 +374,25 @@ export const UNIDADES = [
   'FRASCO-AMPOLA', 'KIT', 'LITRO', 'METRO', 'PACOTE', 'PAR', 'ROLO', 'SACHÊ',
   'SERINGA', 'TUBO', 'UNIDADE'
 ]
+
+export const ORDENS_ESTOQUE = {
+  saldoDesc: 'Maior saldo',
+  saldoAsc: 'Menor saldo',
+  alfabetica: 'Ordem alfabética',
+  semMovimento: 'Parados há mais tempo'
+}
+
+export const CLASSES_ABC = {
+  A: 'Poucos itens, cerca de 80% do valor. Controle apertado.',
+  B: 'Intermediários, cerca de 15% do valor. Controle moderado.',
+  C: 'Muitos itens, cerca de 5% do valor. Controle simples.'
+}
+
+export const CLASSES_XYZ = {
+  X: 'Consumo estável, dá para programar.',
+  Y: 'Consumo variável.',
+  Z: 'Consumo irregular, compre por demanda.'
+}
 
 export const TIPOS_ITEM = {
   MEDICAMENTO: 'Medicamento',

@@ -111,22 +111,81 @@ export async function semear (ctx, { comEstoques = true, comCatalogo = true } = 
    ========================================================= */
 
 export async function salvarItem (dados, ctx, id = null) {
+  const ehAdm = ctx.funcao === 'adm'
   const corpo = {
     ...dados,
     descricao: String(dados.descricao || '').trim(),
     estoqueMinimo: Number(dados.estoqueMinimo) || 0,
     atualizadoEm: serverTimestamp()
   }
+
   if (id) {
+    if (!ehAdm) throw new Error('Só o administrador altera o cadastro de um item já existente.')
     await updateDoc(doc(db, 'itens', id), corpo)
     await espelharItem(id, { ...dados, ...corpo })
     await registrarLog(ctx, 'item-editado', corpo.descricao, 'itens', id)
     return id
   }
-  const ref = await addDoc(collection(db, 'itens'), { ...corpo, criadoEm: serverTimestamp() })
-  await espelharItem(ref.id, corpo)
-  await registrarLog(ctx, 'item-criado', corpo.descricao, 'itens', ref.id)
+
+  // Item proposto por quem não é administrador espera aprovação antes de circular.
+  const pendente = !ehAdm
+  const ref = await addDoc(collection(db, 'itens'), {
+    ...corpo,
+    pendente,
+    propostoPor: pendente ? ctx.nome : '',
+    propostoEm: pendente ? serverTimestamp() : null,
+    criadoEm: serverTimestamp()
+  })
+  if (!pendente) await espelharItem(ref.id, corpo)
+  await registrarLog(
+    ctx,
+    pendente ? 'item-proposto' : 'item-criado',
+    corpo.descricao, 'itens', ref.id
+  )
   return ref.id
+}
+
+/** O administrador libera o item proposto para uso. */
+export async function aprovarItem (item, ctx) {
+  await updateDoc(doc(db, 'itens', item.id), {
+    pendente: false,
+    aprovadoPor: ctx.nome,
+    aprovadoEm: serverTimestamp()
+  })
+  await espelharItem(item.id, { ...item, pendente: false })
+  await registrarLog(
+    ctx, 'item-aprovado',
+    `${item.descricao} — proposto por ${item.propostoPor || 'não informado'}`,
+    'itens', item.id
+  )
+}
+
+/** Descarte da proposta: item duplicado ou cadastrado por engano. */
+export async function descartarProposta (item, ctx, motivo) {
+  await deleteDoc(doc(db, 'itens', item.id))
+  await registrarLog(
+    ctx, 'item-descartado',
+    `${item.descricao} — proposto por ${item.propostoPor || 'não informado'} · ${motivo || 'sem motivo'}`,
+    'itens', item.id
+  )
+}
+
+/** Itens que tiveram alguma movimentação no período, para achar os parados. */
+export async function itensComMovimento (dias = 90) {
+  const desde = new Date(Date.now() - dias * 86400000)
+  const snap = await getDocs(query(
+    collection(db, 'movimentos'),
+    where('criadoEm', '>=', Timestamp.fromDate(desde)),
+    orderBy('criadoEm', 'desc'),
+    limit(4000)
+  ))
+  const mapa = {}
+  snap.docs.forEach(d => {
+    const m = d.data()
+    const q = m.criadoEm?.toMillis ? m.criadoEm.toMillis() : 0
+    if (!mapa[m.itemId] || q > mapa[m.itemId]) mapa[m.itemId] = q
+  })
+  return mapa
 }
 
 export async function excluirItem (item, ctx) {
@@ -852,6 +911,7 @@ export async function aplicarImportacao ({ atualizacoes, novos }, ctx, { criarNo
 
 /** Só o essencial para escolher o item. Nunca preço, nunca saldo. */
 const enxugar = item => ({
+  pendente: false,
   codigo: item.codigo || '',
   descricao: item.descricao || '',
   unidade: item.unidade || 'UNIDADE',
@@ -874,6 +934,8 @@ export async function sincronizarCatalogoPublico (ctx) {
   const comitar = async () => { if (n) { await lote.commit(); lote = writeBatch(db); n = 0 } }
 
   for (const d of itens.docs) {
+    // Item pendente de aprovação não é oferecido à enfermagem.
+    if (d.data().pendente) { atuais.delete(d.id); continue }
     lote.set(doc(db, 'catalogoPublico', d.id), { ...enxugar(d.data()), atualizadoEm: serverTimestamp() })
     if (++n >= 400) await comitar()
   }

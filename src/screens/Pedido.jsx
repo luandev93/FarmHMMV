@@ -47,7 +47,7 @@ export default function Pedido () {
   const linhas = useMemo(() => {
     if (!consumo) return []
     return dados.itens
-      .filter(i => i.ativo !== false)
+      .filter(i => i.ativo !== false && !i.pendente)
       .map(i => {
         const saldo = dados.saldoTotal(i.id)
         const diario = consumo[i.id]?.diario || 0

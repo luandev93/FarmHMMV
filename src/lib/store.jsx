@@ -77,7 +77,8 @@ export function ProvedorDados ({ children }) {
     )
 
     // Índice de busca sem acento, montado uma vez a cada mudança do catálogo.
-    const indice = itensOrdenados.map(i => ({
+    // Pendente de aprovação não aparece na busca de movimentação.
+    const indice = itensOrdenados.filter(i => !i.pendente).map(i => ({
       item: i,
       chave: semAcento(
         [i.descricao, i.principioAtivo, i.codigo, i.grupoFarmacologico, i.marca, i.concentracao]
@@ -137,7 +138,10 @@ export function ProvedorDados ({ children }) {
       return permitidos.length ? outros.filter(x => permitidos.includes(x.id)) : outros
     }
 
+    const itensPendentes = itensOrdenados.filter(i => i.pendente)
+
     const abaixoDoMinimo = itensOrdenados.filter(i => {
+      if (i.pendente) return false
       const min = Number(i.estoqueMinimo) || 0
       return min > 0 && saldoTotal(i.id) < min
     })
@@ -165,6 +169,7 @@ export function ProvedorDados ({ children }) {
       saldoTotal,
       lotesDe,
       itemPorId,
+      itensPendentes,
       acoesDe,
       destinosDe,
       abaixoDoMinimo,

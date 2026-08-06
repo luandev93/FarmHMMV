@@ -3,7 +3,8 @@ import { Confirmar, Icone, Painel, Vazio, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import {
-  salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao, mesclarItens
+  salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao,
+  mesclarItens, aprovarItem, descartarProposta
 } from '../lib/db'
 import {
   CLASSES_CONTROLE, FORMAS_FARMACEUTICAS, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
@@ -17,11 +18,11 @@ const VAZIO = {
   termolabil: false, altaVigilancia: false, controlaLote: true,
   precoMin: null, precoMax: null, precoContrato: null,
   marca: '', fornecedor: '', contrato: '', codigoContrato: '',
-  estoqueMinimo: 0, ativo: true
+  estoqueMinimo: 0, ativo: true, foraDoContrato: false
 }
 
 export default function Catalogo () {
-  const { perfil, usuario, ehFarmaceutico } = useAuth()
+  const { perfil, usuario, ehFarmaceutico, ehAdm } = useAuth()
   const dados = useDados()
   const avisar = useAviso()
 
@@ -34,6 +35,7 @@ export default function Catalogo () {
   const [criarNovos, setCriarNovos] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [mesclando, setMesclando] = useState(null)
+  const [descartando, setDescartando] = useState(null)
   const arquivo = useRef(null)
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
@@ -41,6 +43,8 @@ export default function Catalogo () {
   const lista = useMemo(() => {
     const t = semAcento(busca).trim()
     return dados.itens.filter(i => {
+      if (tipo === 'pendentes') return Boolean(i.pendente)
+      if (i.pendente) return false
       if (tipo && i.tipo !== tipo) return false
       if (!t) return true
       return semAcento(
@@ -90,6 +94,13 @@ export default function Catalogo () {
 
       <div className="pilulas">
         <button className="pilula" aria-pressed={!tipo} onClick={() => setTipo('')}>Todos</button>
+        {dados.itensPendentes.length > 0 && (
+          <button
+            className="pilula" aria-pressed={tipo === 'pendentes'}
+            onClick={() => setTipo('pendentes')}
+            style={{ borderColor: 'var(--transf)', color: tipo === 'pendentes' ? undefined : 'var(--transf)' }}
+          >Aguardando aprovação ({dados.itensPendentes.length})</button>
+        )}
         {Object.entries(TIPOS_ITEM).map(([id, nome]) => (
           <button key={id} className="pilula" aria-pressed={tipo === id} onClick={() => setTipo(id)}>
             {nome}
@@ -108,6 +119,13 @@ export default function Catalogo () {
             </button>
           </div>
 
+          {!ehAdm && (
+            <p className="dica bloco">
+              Você pode propor itens novos. Eles ficam aguardando a aprovação do
+              administrador antes de aparecerem nos lançamentos.
+            </p>
+          )}
+
           <input
             ref={arquivo} type="file" accept=".csv,text/csv" style={{ display: 'none' }}
             onChange={async e => {
@@ -124,9 +142,11 @@ export default function Catalogo () {
               }
             }}
           />
-          <button className="btn secundario bloco-largo bloco" onClick={() => arquivo.current?.click()}>
-            <Icone nome="etiqueta" tamanho={18} /> Importar planilha de preços
-          </button>
+          {ehAdm && (
+            <button className="btn secundario bloco-largo bloco" onClick={() => arquivo.current?.click()}>
+              <Icone nome="etiqueta" tamanho={18} /> Importar planilha
+            </button>
+          )}
         </>
       )}
 
@@ -160,6 +180,8 @@ export default function Catalogo () {
                 {i.controlado && <span className="etq controle">{i.controlado}</span>}
                 {i.termolabil && <span className="etq frio">2–8 °C</span>}
                 {i.ativo === false && <span className="etq alerta">inativo</span>}
+                {i.pendente && <span className="etq atencao">aguardando aprovação</span>}
+                {i.foraDoContrato && <span className="etq atencao">fora do contrato</span>}
                 {Number(i.estoqueMinimo) > 0 && <span>mín. {i.estoqueMinimo}</span>}
               </div>
             </div>
@@ -272,10 +294,17 @@ export default function Catalogo () {
       {editando && (
         <FormularioItem
           item={editando}
-          somenteLeitura={!ehFarmaceutico}
+          somenteLeitura={editando.id ? !ehAdm : !ehFarmaceutico}
           aoFechar={() => setEditando(null)}
           aoExcluir={() => { setExcluindo(editando); setEditando(null) }}
           aoMesclar={() => { setMesclando(editando); setEditando(null) }}
+          ehAdm={ehAdm}
+          aoAprovar={async () => {
+            await aprovarItem(editando, ctx)
+            setEditando(null)
+            avisar('Item aprovado e liberado para uso.', 'ok')
+          }}
+          aoDescartar={() => { setDescartando(editando); setEditando(null) }}
           aoSalvar={async dadosItem => {
             await salvarItem(dadosItem, ctx, editando.id || null)
             setEditando(null)
@@ -297,6 +326,21 @@ export default function Catalogo () {
                 : 'Itens mesclados.',
               'ok'
             )
+          }}
+        />
+      )}
+
+      {descartando && (
+        <Confirmar
+          titulo="Descartar a proposta?"
+          texto={`"${descartando.descricao}" some do catálogo. Use quando o item for duplicado ou tiver sido cadastrado por engano — ${descartando.propostoPor || 'quem propôs'} não é avisado pelo sistema.`}
+          rotuloConfirmar="Descartar"
+          perigo
+          aoFechar={() => setDescartando(null)}
+          aoConfirmar={async () => {
+            await descartarProposta(descartando, ctx, 'duplicado ou cadastrado por engano')
+            setDescartando(null)
+            avisar('Proposta descartada.', 'ok')
           }}
         />
       )}
@@ -324,7 +368,9 @@ export default function Catalogo () {
   )
 }
 
-function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, aoMesclar, somenteLeitura }) {
+function FormularioItem ({
+  item, aoSalvar, aoFechar, aoExcluir, aoMesclar, aoAprovar, aoDescartar, ehAdm, somenteLeitura
+}) {
   const [f, setF] = useState({ ...VAZIO, ...item })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -357,7 +403,14 @@ function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, aoMesclar, somen
       titulo={item.id ? 'Editar item' : 'Novo item'}
       aoFechar={aoFechar}
       rodape={
-        somenteLeitura ? (
+        item.pendente && ehAdm ? (
+          <>
+            <button className="btn secundario perigo" onClick={aoDescartar}>Descartar</button>
+            <button className="btn" onClick={async () => { await enviar(); await aoAprovar() }} disabled={salvando}>
+              {salvando ? 'Aprovando…' : 'Aprovar'}
+            </button>
+          </>
+        ) : somenteLeitura ? (
           <button className="btn secundario" onClick={aoFechar}>Fechar</button>
         ) : (
           <>
@@ -369,7 +422,20 @@ function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, aoMesclar, somen
         )
       }
     >
-      {item.id && !somenteLeitura && (
+      {item.pendente && (
+        <div className="aviso-caixa" style={{ marginTop: 12 }}>
+          Proposto por <b>{item.propostoPor || 'não informado'}</b>. Confira a descrição e
+          se já não existe item igual antes de aprovar.
+        </div>
+      )}
+
+      {somenteLeitura && item.id && (
+        <div className="info-caixa" style={{ marginTop: 12 }}>
+          Só o administrador altera o cadastro de itens já existentes.
+        </div>
+      )}
+
+      {item.id && ehAdm && (
         <button
           className="btn secundario bloco-largo" style={{ marginTop: 14 }}
           onClick={aoMesclar}
@@ -547,6 +613,7 @@ function FormularioItem ({ item, aoSalvar, aoFechar, aoExcluir, aoMesclar, somen
             <Marcador rotulo="Guardar entre 2 e 8 °C" valor={f.termolabil} aoTrocar={v => troca('termolabil', v)} />
             <Marcador rotulo="Medicamento de alta vigilância" valor={f.altaVigilancia} aoTrocar={v => troca('altaVigilancia', v)} />
             <Marcador rotulo="Controlar lote e validade" valor={f.controlaLote} aoTrocar={v => troca('controlaLote', v)} />
+            <Marcador rotulo="Item fora do contrato" valor={f.foraDoContrato} aoTrocar={v => troca('foraDoContrato', v)} />
             <Marcador rotulo="Item ativo (aparece na busca)" valor={f.ativo !== false} aoTrocar={v => troca('ativo', v)} />
           </div>
 

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BotaoOlho, Icone, Painel, Vazio, ocultar, useValores } from '../components/ui'
 import { useDados } from '../lib/store'
-import { movimentosRecentes } from '../lib/db'
+import { movimentosRecentes, itensComMovimento } from '../lib/db'
 import { useAuth } from '../lib/auth'
 import {
-  baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero, precoDe,
-  semAcento, siglaDaForma
+  ORDENS_ESTOQUE, baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero,
+  precoDe, semAcento, siglaDaForma
 } from '../lib/utils'
 
 const FILTROS = [
@@ -25,6 +25,14 @@ export default function Estoque () {
   const [busca, setBusca] = useState('')
   const [filtro, setFiltro] = useState('comSaldo')
   const [forma, setForma] = useState('')
+  const [ordem, setOrdem] = useState('saldoDesc')
+  const [movimentos, setMovimentos] = useState(null)
+
+  // Só busca o histórico quando a ordenação por itens parados é pedida.
+  useEffect(() => {
+    if (ordem !== 'semMovimento' || movimentos) return
+    itensComMovimento(365).then(setMovimentos).catch(() => setMovimentos({}))
+  }, [ordem, movimentos])
   const [detalhe, setDetalhe] = useState(null)
 
   const saldoDoContexto = item =>
@@ -74,8 +82,18 @@ export default function Estoque () {
         }
         return true
       })
-      .sort((a, b) => saldoDoContexto(b) - saldoDoContexto(a) || a.descricao.localeCompare(b.descricao))
-  }, [dados, busca, filtro, estoqueId, forma])
+      .sort((a, b) => {
+        if (ordem === 'alfabetica') return a.descricao.localeCompare(b.descricao, 'pt-BR')
+        if (ordem === 'saldoAsc') return saldoDoContexto(a) - saldoDoContexto(b)
+        if (ordem === 'semMovimento') {
+          // Sem registro no período vale como "parado desde sempre".
+          const ma = movimentos?.[a.id] || 0
+          const mb = movimentos?.[b.id] || 0
+          return ma - mb || a.descricao.localeCompare(b.descricao, 'pt-BR')
+        }
+        return saldoDoContexto(b) - saldoDoContexto(a) || a.descricao.localeCompare(b.descricao, 'pt-BR')
+      })
+  }, [dados, busca, filtro, estoqueId, forma, ordem, movimentos])
 
   // O valor só é calculado para quem pode vê-lo.
   const valorTotal = useMemo(
@@ -144,6 +162,21 @@ export default function Estoque () {
         </div>
       )}
 
+      <div className="bloco">
+        <select className="campo" value={ordem} onChange={e => setOrdem(e.target.value)}>
+          {Object.entries(ORDENS_ESTOQUE).map(([id, nome]) => (
+            <option key={id} value={id}>{nome}</option>
+          ))}
+        </select>
+        {ordem === 'semMovimento' && (
+          <p className="dica" style={{ marginTop: 6 }}>
+            {movimentos === null
+              ? 'Lendo o histórico do último ano…'
+              : 'Os primeiros da lista não têm movimentação registrada no último ano.'}
+          </p>
+        )}
+      </div>
+
       <div className="pilulas">
         {FILTROS.map(f => (
           <button
@@ -199,6 +232,10 @@ export default function Estoque () {
                     {i.controlado && <span className="etq controle">{i.controlado}</span>}
                     {i.termolabil && <span className="etq frio">2–8 °C</span>}
                     {abaixo && <span className="etq alerta">abaixo do mínimo ({minimo})</span>}
+                    {i.foraDoContrato && <span className="etq atencao">fora do contrato</span>}
+                    {ordem === 'semMovimento' && movimentos && !movimentos[i.id] && (
+                      <span className="etq atencao">sem movimento no ano</span>
+                    )}
                     {proximo !== undefined && proximo <= (dados.config.diasAlertaValidade || 90) && (
                       <span className={'etq ' + (proximo < 0 ? 'alerta' : 'atencao')}>
                         {proximo < 0 ? 'vencido' : `vence em ${proximo} d`}

@@ -52,7 +52,11 @@ service cloud.firestore {
     // Catálogo de itens
     match /itens/{id} {
       allow read: if operacional();
-      allow write: if ehFarmaceutico();
+      // O farmacêutico propõe itens novos, sempre como pendentes;
+      // corrigir, aprovar e excluir cadastro é do administrador.
+      allow create: if ehAdm()
+                    || (ehFarmaceutico() && request.resource.data.pendente == true);
+      allow update, delete: if ehAdm();
     }
 
     // Saldos e lotes: gravados pelo app durante os lançamentos
