@@ -586,7 +586,31 @@ select.campo {
 .tela-login .marca h1 { font-size: 23px; letter-spacing: -.02em; }
 .tela-login .marca p { color: var(--azul-200); font-size: 13.5px; margin-top: 5px; }
 .tela-login form { display: flex; flex-direction: column; gap: 11px; max-width: 400px; width: 100%; margin: 0 auto; }
-.tela-login .campo { background: rgba(255, 255, 255, .96); border-color: transparent; }
+.tela-login .campo {
+  background: #fff;
+  border-color: transparent;
+  color: var(--tinta);
+}
+.tela-login .campo::placeholder { color: #7b8b9c; }
+
+/* Campo de senha com o botão de revelar dentro. */
+.campo-senha { position: relative; }
+.campo-senha .campo { padding-right: 52px; }
+.campo-senha .olho {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: none;
+  color: var(--tinta-fraca);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: 8px;
+}
 .tela-login .link {
   background: none; border: 0; color: var(--azul-200); font-size: 13.5px;
   text-decoration: underline; cursor: pointer; padding: 8px; align-self: center;

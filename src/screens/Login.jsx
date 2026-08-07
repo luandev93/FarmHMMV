@@ -10,6 +10,7 @@ export default function Login () {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  const [verSenha, setVerSenha] = useState(false)
   const [erro, setErro] = useState('')
   const [recado, setRecado] = useState('')
 
@@ -76,11 +77,21 @@ export default function Login () {
         />
 
         {modo === 'entrar' && (
-          <input
-            className="campo" type="password" placeholder="Senha" value={senha}
-            onChange={e => setSenha(e.target.value)}
-            autoComplete="current-password" required
-          />
+          <div className="campo-senha">
+            <input
+              className="campo" type={verSenha ? 'text' : 'password'} placeholder="Senha"
+              value={senha} onChange={e => setSenha(e.target.value)}
+              autoComplete="current-password" required
+            />
+            <button
+              type="button" className="olho"
+              onClick={() => setVerSenha(v => !v)}
+              aria-label={verSenha ? 'Ocultar senha' : 'Mostrar senha'}
+              aria-pressed={verSenha}
+            >
+              <Icone nome={verSenha ? 'olho' : 'olhoFechado'} tamanho={20} />
+            </button>
+          </div>
         )}
 
         {erro && <div className="erro-caixa">{erro}</div>}
