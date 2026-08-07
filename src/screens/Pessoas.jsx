@@ -118,7 +118,7 @@ export default function Pessoas () {
       </div>
 
       {ehAdm && (
-        <button className="btn bloco-largo bloco" onClick={() => setEditando({ ...PESSOA_VAZIA, novo: true })}>
+        <button className="btn bloco-largo bloco" onClick={() => setEditando({ ...PESSOA_VAZIA })}>
           <Icone nome="entrada" tamanho={18} /> Cadastrar pessoa
         </button>
       )}
@@ -130,7 +130,7 @@ export default function Pessoas () {
           {lista.map(p => (
             <button
               key={p.id} className="linha-item"
-              onClick={() => ehAdm && setEditando({ ...p, novo: false })}
+              onClick={() => ehAdm && setEditando(p)}
               style={{ cursor: ehAdm ? 'pointer' : 'default' }}
             >
               <div className="corpo">
@@ -174,8 +174,10 @@ export default function Pessoas () {
             }
           }}
           aoSalvar={async (corpo, senha) => {
+            const ehNovo = !editando.id
+
             // Cadastro novo com acesso: cria a conta e usa o uid como id.
-            if (editando.novo && corpo.acesso.temLogin) {
+            if (ehNovo && corpo.acesso?.temLogin) {
               await comAppParalelo(async authParalelo => {
                 const cred = await createUserWithEmailAndPassword(authParalelo, corpo.email, senha)
                 await mudarIdDePessoa(null, cred.user.uid, { ...corpo, senhaProvisoria: true }, ctx)
@@ -183,13 +185,13 @@ export default function Pessoas () {
               setEditando(null)
               return avisar('Pessoa cadastrada com acesso ao sistema.', 'ok')
             }
-            if (editando.novo) {
+            if (ehNovo) {
               await criarPessoaSemAcesso(corpo, ctx)
               setEditando(null)
               return avisar('Pessoa cadastrada.', 'ok')
             }
             // Passou a ter acesso: o cadastro muda de id para o uid da conta.
-            if (corpo.criandoAcesso && !editando.acesso?.temLogin) {
+            if (corpo.criandoAcesso === true && !editando.acesso?.temLogin) {
               await comAppParalelo(async authParalelo => {
                 const cred = await createUserWithEmailAndPassword(authParalelo, corpo.email, senha)
                 await mudarIdDePessoa(editando.id, cred.user.uid, { ...corpo, senhaProvisoria: true }, ctx)
@@ -258,7 +260,7 @@ function Formulario ({ pessoa, souEu, semelhantes = [], aoSalvar, aoFechar, aoRe
 
   const troca = (c, v) => setF(a => ({ ...a, [c]: v }))
   const trocaModulo = (m, c, v) => setF(a => ({ ...a, [m]: { ...a[m], [c]: v } }))
-  const novo = Boolean(pessoa.novo)
+  const novo = !pessoa.id
 
   /* `novo` e `criandoAcesso` controlam a tela, não são dados da pessoa.
      Gravá-los fazia o cadastro nascer marcado como novo para sempre. */
