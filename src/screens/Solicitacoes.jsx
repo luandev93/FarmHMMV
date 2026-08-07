@@ -17,7 +17,7 @@ export default function Solicitacoes () {
   const [aberta, setAberta] = useState(null)
   const [erro, setErro] = useState('')
 
-  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
+  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
   const dispensacao = dados.estoques.find(e => e.id === dados.config.estoqueDispensacaoId)
 
   useEffect(() => {

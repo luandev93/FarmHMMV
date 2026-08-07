@@ -24,7 +24,7 @@ export default function Pessoas () {
   const [removendo, setRemovendo] = useState(null)
   const [trocaRT, setTrocaRT] = useState(null)
 
-  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || 'adm' }
+  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
 
   const lista = useMemo(() => {
     const t = semAcento(busca).trim()

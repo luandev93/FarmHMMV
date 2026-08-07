@@ -16,7 +16,7 @@ export default function Config () {
 
   useEffect(() => { setF(dados.config) }, [dados.config])
 
-  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
+  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
   const troca = (c, v) => setF(a => ({ ...a, [c]: v }))
   const numero = v => Number(String(v).replace(',', '.')) || 0
 

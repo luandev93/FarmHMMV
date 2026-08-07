@@ -234,7 +234,7 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
     setSalvando(true)
     setErro('')
     try {
-      const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
+      const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
       const total = await salvarLancamentos(linhas, ctx, {
         permitirNegativo: dados.config.permitirSaldoNegativo
       })

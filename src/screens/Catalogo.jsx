@@ -39,7 +39,7 @@ export default function Catalogo () {
   const [descartando, setDescartando] = useState(null)
   const arquivo = useRef(null)
 
-  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
+  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
 
   const lista = useMemo(() => {
     const t = semAcento(busca).trim()

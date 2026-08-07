@@ -13,7 +13,7 @@ export default function Locais () {
   const [excluindo, setExcluindo] = useState(null)
   const [padrao, setPadrao] = useState(null)
 
-  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.funcao }
+  const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
 
   const itensNoLocal = id =>
     dados.lotes.filter(l => l.estoqueId === id && l.qtd > 0).length
