@@ -173,10 +173,12 @@ export default function Catalogo () {
                   try {
                     const r = await renumerarCatalogo(ctx)
                     avisar(
-                      r.itens
-                        ? `${r.itens} item(ns) renumerados e ${r.registros} registro(s) atualizados.`
-                        : 'Os códigos já estão em ordem.',
-                      'ok'
+                      r.naoAtualizadas?.length
+                        ? `${r.itens} renumerados, mas ${r.naoAtualizadas.join(' e ')} ficaram sem atualizar por permissão.`
+                        : r.itens
+                          ? `${r.itens} item(ns) renumerados e ${r.registros} registro(s) atualizados.`
+                          : 'Os códigos já estão em ordem.',
+                      r.naoAtualizadas?.length ? 'erro' : 'ok'
                     )
                   } catch (e) {
                     avisar('Falhou: ' + e.message, 'erro')

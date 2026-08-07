@@ -12,7 +12,8 @@ export function idAleatorio () {
 }
 
 export function formatarNumero (n) {
-  const v = Number(n || 0)
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '0'
   return Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',')
 }
 
@@ -183,7 +184,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.22'
+export const VERSAO = '1.23'
 
 /* =========================================================
    Relatório de estoque por período

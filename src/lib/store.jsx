@@ -44,7 +44,9 @@ export function ProvedorDados ({ children }) {
         const mapa = {}
         s.docs.forEach(d => {
           const v = d.data()
-          mapa[chaveSaldo(v.estoqueId, v.itemId)] = v.qtd || 0
+          // Valor inválido no banco vira zero: um NaN contaminaria toda a soma.
+          const qtd = Number(v.qtd)
+          mapa[chaveSaldo(v.estoqueId, v.itemId)] = Number.isFinite(qtd) ? qtd : 0
         })
         setSaldos(mapa)
         setProntos(p => ({ ...p, saldos: true }))
@@ -84,7 +86,10 @@ export function ProvedorDados ({ children }) {
       )
     }))
 
-    const saldoDe = (estoqueId, itemId) => saldos[chaveSaldo(estoqueId, itemId)] || 0
+    const saldoDe = (estoqueId, itemId) => {
+      const v = Number(saldos[chaveSaldo(estoqueId, itemId)])
+      return Number.isFinite(v) ? v : 0
+    }
     const saldoTotal = itemId =>
       estoques.reduce((s, e) => s + saldoDe(e.id, itemId), 0)
 

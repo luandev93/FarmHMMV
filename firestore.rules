@@ -86,7 +86,12 @@ service cloud.firestore {
     match /movimentos/{id} {
       allow read:   if operacional();
       allow create: if operacional();
-      allow update: if false;
+      /* O histórico é imutável: a única alteração possível é o código do item,
+         reescrito pela renumeração do catálogo para o registro continuar
+         apontando para o item certo. Nada mais pode ser tocado. */
+      allow update: if ehAdm()
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['itemCodigo']);
       allow delete: if ehAdm();
     }
 

@@ -1802,20 +1802,28 @@ export async function renumerarCatalogo (ctx) {
   }
   await comitar()
 
-  // O código também é guardado junto de cada registro, para o histórico
-  // continuar legível mesmo que o item mude de nome depois.
+  /* O código também é guardado junto de cada registro, para o histórico
+     continuar legível. Cada coleção é tratada à parte: se uma recusar por
+     permissão, as outras seguem, e o resultado diz o que ficou de fora. */
+  const naoAtualizadas = []
   for (const [colecao, campo] of [['movimentos', 'itemCodigo'], ['emprestimos', 'itemCodigo'],
                                   ['catalogoPublico', 'codigo']]) {
-    const alvo = await getDocs(collection(db, colecao))
-    for (const d of alvo.docs) {
-      const item = d.data().itemId || d.id
-      const codigo = novoCodigo[item]
-      if (!codigo || d.data()[campo] === codigo) continue
-      lote.update(doc(db, colecao, d.id), { [campo]: codigo })
-      registros++
-      if (++n >= 400) await comitar()
+    try {
+      const alvo = await getDocs(collection(db, colecao))
+      let loteColecao = writeBatch(db)
+      let m = 0
+      for (const d of alvo.docs) {
+        const item = d.data().itemId || d.id
+        const codigo = novoCodigo[item]
+        if (!codigo || d.data()[campo] === codigo) continue
+        loteColecao.update(doc(db, colecao, d.id), { [campo]: codigo })
+        registros++
+        if (++m >= 400) { await loteColecao.commit(); loteColecao = writeBatch(db); m = 0 }
+      }
+      if (m) await loteColecao.commit()
+    } catch (e) {
+      naoAtualizadas.push(colecao)
     }
-    await comitar()
   }
 
   // As requisições guardam os itens numa lista dentro do documento.
@@ -1838,7 +1846,8 @@ export async function renumerarCatalogo (ctx) {
 
   await registrarLog(
     ctx, 'catalogo-renumerado',
-    `${mudaram.length} item(ns) renumerados em ordem alfabética e ${registros} registro(s) atualizados`
+    `${mudaram.length} item(ns) renumerados em ordem alfabética e ${registros} registro(s) atualizados` +
+    (naoAtualizadas.length ? ` — sem permissão em: ${naoAtualizadas.join(', ')}` : '')
   )
-  return { itens: mudaram.length, registros }
+  return { itens: mudaram.length, registros, naoAtualizadas }
 }
