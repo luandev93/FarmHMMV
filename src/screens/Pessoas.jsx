@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import { Confirmar, Icone, Painel, Vazio, useAviso } from '../components/ui'
 import { useAuth, traduzirErro } from '../lib/auth'
 import { useDados } from '../lib/store'
 import {
-  PESSOA_VAZIA, salvarPessoa, criarPessoaSemAcesso, excluirPessoa, mudarIdDePessoa
+  PESSOA_VAZIA, salvarPessoa, criarPessoaSemAcesso, excluirPessoa, mudarIdDePessoa,
+  limparMarcadorDeNovo
 } from '../lib/db'
 import { comAppParalelo, auth } from '../firebase'
 import {
@@ -23,6 +24,12 @@ export default function Pessoas () {
   const [editando, setEditando] = useState(null)
   const [removendo, setRemovendo] = useState(null)
   const [trocaRT, setTrocaRT] = useState(null)
+
+  // Corrige sozinho os cadastros que ficaram travados como "novo".
+  useEffect(() => {
+    if (!ehAdm) return
+    limparMarcadorDeNovo(ctx).catch(() => {})
+  }, [ehAdm])
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
 
@@ -123,7 +130,7 @@ export default function Pessoas () {
           {lista.map(p => (
             <button
               key={p.id} className="linha-item"
-              onClick={() => ehAdm && setEditando(p)}
+              onClick={() => ehAdm && setEditando({ ...p, novo: false })}
               style={{ cursor: ehAdm ? 'pointer' : 'default' }}
             >
               <div className="corpo">
@@ -252,6 +259,13 @@ function Formulario ({ pessoa, souEu, semelhantes = [], aoSalvar, aoFechar, aoRe
   const troca = (c, v) => setF(a => ({ ...a, [c]: v }))
   const trocaModulo = (m, c, v) => setF(a => ({ ...a, [m]: { ...a[m], [c]: v } }))
   const novo = Boolean(pessoa.novo)
+
+  /* `novo` e `criandoAcesso` controlam a tela, não são dados da pessoa.
+     Gravá-los fazia o cadastro nascer marcado como novo para sempre. */
+  const paraGravar = extra => {
+    const { novo: _n, criandoAcesso: _c, id: _i, faltam: _f, ...limpo } = { ...f, ...extra }
+    return limpo
+  }
   // Só cria conta quando foi pedido de propósito, nunca como efeito de salvar.
   const ganhandoAcesso = criandoAcesso && !pessoa.acesso?.temLogin
 
@@ -272,12 +286,14 @@ function Formulario ({ pessoa, souEu, semelhantes = [], aoSalvar, aoFechar, aoRe
       const s = senhaPorNascimento ? senhaPeloNascimento(f.nascimento) : senha
       if (!s || s.length < 6) return setErro('A senha provisória precisa ter pelo menos 6 caracteres.')
       setSalvando(true)
-      try { await aoSalvar({ ...f, email }, s) } catch (e) { setErro(traduzirErro(e)) } finally { setSalvando(false) }
+      try {
+        await aoSalvar({ ...paraGravar({ email, acesso: { temLogin: true } }), criandoAcesso: true }, s)
+      } catch (e) { setErro(traduzirErro(e)) } finally { setSalvando(false) }
       return
     }
 
     setSalvando(true)
-    try { await aoSalvar({ ...f, email: f.acesso.temLogin ? email : '' }, '') }
+    try { await aoSalvar(paraGravar({ email: f.email || '' }), '') }
     catch (e) { setErro(traduzirErro(e)) } finally { setSalvando(false) }
   }
 

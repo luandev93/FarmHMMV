@@ -1,6 +1,7 @@
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-  query, where, orderBy, limit, writeBatch, increment, serverTimestamp, Timestamp, onSnapshot
+  query, where, orderBy, limit, writeBatch, increment, serverTimestamp, Timestamp, onSnapshot,
+  deleteField
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { chaveSaldo, ordemFEFO, idAleatorio, semIndefinidos } from './utils'
@@ -1246,6 +1247,28 @@ export async function mudarIdDePessoa (idAntigo, uid, dados, ctx) {
   })
   if (idAntigo && idAntigo !== uid) await deleteDoc(doc(db, 'pessoas', idAntigo))
   await registrarLog(ctx, 'pessoa-com-acesso', `${dados.nome} passou a ter acesso`, 'pessoas', uid)
+}
+
+/**
+ * Tira dos documentos o campo `novo`, que era só um controle de tela e acabou
+ * gravado por engano. Enquanto ele estiver lá, o cadastro reabre como se fosse
+ * novo: sem botão de excluir e criando cópia a cada salvamento.
+ */
+export async function limparMarcadorDeNovo (ctx) {
+  const snap = await getDocs(collection(db, 'pessoas'))
+  const afetados = snap.docs.filter(d => d.data().novo !== undefined)
+  if (!afetados.length) return 0
+
+  let lote = writeBatch(db)
+  let n = 0
+  for (const d of afetados) {
+    lote.update(doc(db, 'pessoas', d.id), { novo: deleteField() })
+    if (++n >= 400) { await lote.commit(); lote = writeBatch(db); n = 0 }
+  }
+  if (n) await lote.commit()
+
+  await registrarLog(ctx, 'correcao-cadastro', `${afetados.length} cadastro(s) destravados`)
+  return afetados.length
 }
 
 /* ---------------------------------------------------------
