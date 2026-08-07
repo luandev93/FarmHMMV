@@ -143,7 +143,7 @@ export default function Pessoas () {
                   {Object.entries(MODULOS).filter(([m]) => p[m]?.rt).map(([m, nome]) => (
                     <span key={m} className="etq controle">RT {nome}</span>
                   ))}
-                  {p.ativo === false && <span className="etq alerta">suspenso</span>}
+
                   {p.id === usuario.uid && <span className="etq ok">você</span>}
                 </div>
               </div>
@@ -266,7 +266,7 @@ function Formulario ({ pessoa, souEu, semelhantes = [], aoSalvar, aoFechar, aoRe
      Gravá-los fazia o cadastro nascer marcado como novo para sempre. */
   const paraGravar = extra => {
     const { novo: _n, criandoAcesso: _c, id: _i, faltam: _f, ...limpo } = { ...f, ...extra }
-    return limpo
+    return { ...limpo, ativo: true }
   }
   // Só cria conta quando foi pedido de propósito, nunca como efeito de salvar.
   const ganhandoAcesso = criandoAcesso && !pessoa.acesso?.temLogin
@@ -540,12 +540,7 @@ function Formulario ({ pessoa, souEu, semelhantes = [], aoSalvar, aoFechar, aoRe
             </>
           )}
 
-          {!souEu && (
-            <Marcador
-              rotulo="Cadastro ativo"
-              valor={f.ativo !== false} aoTrocar={v => troca('ativo', v)}
-            />
-          )}
+
         </div>
 
         {erro && <div className="erro-caixa">{erro}</div>}

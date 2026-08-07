@@ -30,12 +30,12 @@ export function ProvedorDados ({ children }) {
 
     const paradas = [
       onSnapshot(collection(db, 'itens'), s => {
-        setItens(s.docs.map(d => ({ id: d.id, ...d.data() })))
+        setItens(s.docs.map(d => ({ ...d.data(), id: d.id })))
         setProntos(p => ({ ...p, itens: true }))
       }),
       onSnapshot(collection(db, 'estoques'), s => {
         setEstoques(
-          s.docs.map(d => ({ id: d.id, ...d.data() }))
+          s.docs.map(d => ({ ...d.data(), id: d.id }))
             .sort((a, b) => (a.ordem || 99) - (b.ordem || 99) || a.nome.localeCompare(b.nome))
         )
         setProntos(p => ({ ...p, estoques: true }))
@@ -50,14 +50,14 @@ export function ProvedorDados ({ children }) {
         setProntos(p => ({ ...p, saldos: true }))
       }),
       onSnapshot(query(collection(db, 'lotes'), where('qtd', '>', 0)), s => {
-        setLotes(s.docs.map(d => ({ id: d.id, ...d.data() })))
+        setLotes(s.docs.map(d => ({ ...d.data(), id: d.id })))
       }),
       onSnapshot(query(collection(db, 'solicitacoes'), where('status', '==', 'pendente')),
         s => setPendentes(s.size), () => setPendentes(0)),
 
       onSnapshot(collection(db, 'pessoas'), s => {
         setUsuarios(
-          s.docs.map(d => ({ id: d.id, ...d.data() }))
+          s.docs.map(d => ({ ...d.data(), id: d.id }))
             .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
         )
       }, () => setUsuarios([])),

@@ -232,7 +232,7 @@ async function lotesDisponiveis (estoqueId) {
   const snap = await getDocs(
     query(collection(db, 'lotes'), where('estoqueId', '==', estoqueId), where('qtd', '>', 0))
   )
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }))
 }
 
 /** Distribui a quantidade entre os lotes disponíveis, do que vence primeiro para o último. */
@@ -526,7 +526,7 @@ export async function salvarInventario (linhas, ctx) {
   const porLocal = {}
   for (const id of locais) {
     const snap = await getDocs(query(collection(db, 'lotes'), where('estoqueId', '==', id)))
-    porLocal[id] = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    porLocal[id] = snap.docs.map(d => ({ ...d.data(), id: d.id }))
   }
 
   const operacoes = []
@@ -647,7 +647,7 @@ export async function movimentosRecentes (filtros = {}) {
   if (filtros.desde) restricoes.push(where('criadoEm', '>=', Timestamp.fromDate(filtros.desde)))
   const consulta = query(...partes, ...restricoes, orderBy('criadoEm', 'desc'), limit(filtros.limite || 300))
   const snap = await getDocs(consulta)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }))
 }
 
 /** Consumo diário médio por item, a partir das saídas do período. */
@@ -686,7 +686,7 @@ export async function consumoPorItem (dias, { incluirDescarte = false } = {}) {
 
 export async function lerLogs (limite = 300) {
   const snap = await getDocs(query(collection(db, 'logs'), orderBy('criadoEm', 'desc'), limit(limite)))
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }))
 }
 
 /* =========================================================
@@ -972,7 +972,7 @@ export async function espelharItem (id, dados) {
 export function assinarSolicitacoes (aoReceber, aoFalhar) {
   return onSnapshot(
     query(collection(db, 'solicitacoes'), orderBy('criadoEm', 'desc'), limit(300)),
-    s => aoReceber(s.docs.map(d => ({ id: d.id, ...d.data() }))),
+    s => aoReceber(s.docs.map(d => ({ ...d.data(), id: d.id }))),
     e => aoFalhar && aoFalhar(e)
   )
 }
@@ -1087,7 +1087,7 @@ export async function mesclarItens (origem, destino, ctx) {
   if (origem.id === destino.id) throw new Error('Escolha itens diferentes.')
 
   const snap = await getDocs(query(collection(db, 'lotes'), where('itemId', '==', origem.id)))
-  const lotes = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => (l.qtd || 0) > 0)
+  const lotes = snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(l => (l.qtd || 0) > 0)
 
   const operacoes = []
   const carimbo = serverTimestamp()
@@ -1207,7 +1207,10 @@ export const PESSOA_VAZIA = {
 }
 
 export async function salvarPessoa (id, dados, ctx) {
-  await setDoc(doc(db, 'pessoas', id), { ...dados, atualizadoEm: serverTimestamp() }, { merge: true })
+  if (!id) throw new Error('Cadastro sem identificador: recarregue a tela e tente de novo.')
+  // O identificador vive no caminho do documento, nunca dentro dele.
+  const { id: _ignorado, ...corpo } = dados
+  await setDoc(doc(db, 'pessoas', id), { ...corpo, atualizadoEm: serverTimestamp() }, { merge: true })
   if (ctx) await registrarLog(ctx, 'pessoa-salva', dados.nome || id, 'pessoas', id)
 }
 
@@ -1256,13 +1259,17 @@ export async function mudarIdDePessoa (idAntigo, uid, dados, ctx) {
  */
 export async function limparMarcadorDeNovo (ctx) {
   const snap = await getDocs(collection(db, 'pessoas'))
-  const afetados = snap.docs.filter(d => d.data().novo !== undefined)
+  /* `id` gravado dentro do documento sobrescrevia o identificador real na
+     leitura, e a edição acabava criando outro cadastro em vez de atualizar. */
+  const afetados = snap.docs.filter(d =>
+    d.data().novo !== undefined || d.data().id !== undefined
+  )
   if (!afetados.length) return 0
 
   let lote = writeBatch(db)
   let n = 0
   for (const d of afetados) {
-    lote.update(doc(db, 'pessoas', d.id), { novo: deleteField() })
+    lote.update(doc(db, 'pessoas', d.id), { novo: deleteField(), id: deleteField() })
     if (++n >= 400) { await lote.commit(); lote = writeBatch(db); n = 0 }
   }
   if (n) await lote.commit()
@@ -1483,7 +1490,7 @@ export async function marcarSenhaProvisoria (pessoaId, ctx) {
 export function assinarEmprestimos (aoReceber, aoFalhar) {
   return onSnapshot(
     query(collection(db, 'emprestimos'), orderBy('criadoEm', 'desc'), limit(500)),
-    s => aoReceber(s.docs.map(d => ({ id: d.id, ...d.data() }))),
+    s => aoReceber(s.docs.map(d => ({ ...d.data(), id: d.id }))),
     e => aoFalhar && aoFalhar(e)
   )
 }
