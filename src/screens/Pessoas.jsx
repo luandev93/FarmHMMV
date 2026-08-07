@@ -150,6 +150,10 @@ export default function Pessoas () {
         <Formulario
           key={editando.id || 'novo'}
           pessoa={editando}
+          semelhantes={dados.pessoas.filter(p =>
+            p.id !== editando.id &&
+            semAcento(p.nome).trim() === semAcento(editando.nome || '').trim()
+          )}
           souEu={editando.id === usuario.uid}
           criadoPor={perfil.nome}
           aoFechar={() => setEditando(null)}
@@ -178,7 +182,7 @@ export default function Pessoas () {
               return avisar('Pessoa cadastrada.', 'ok')
             }
             // Passou a ter acesso: o cadastro muda de id para o uid da conta.
-            if (corpo.acesso.temLogin && !editando.acesso?.temLogin) {
+            if (corpo.criandoAcesso && !editando.acesso?.temLogin) {
               await comAppParalelo(async authParalelo => {
                 const cred = await createUserWithEmailAndPassword(authParalelo, corpo.email, senha)
                 await mudarIdDePessoa(editando.id, cred.user.uid, { ...corpo, senhaProvisoria: true }, ctx)
@@ -223,7 +227,7 @@ export default function Pessoas () {
   )
 }
 
-function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRecuperacao }) {
+function Formulario ({ pessoa, souEu, semelhantes = [], aoSalvar, aoFechar, aoRemover, aoEnviarRecuperacao }) {
   const [f, setF] = useState({
     ...PESSOA_VAZIA,
     ...pessoa,
@@ -243,11 +247,13 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
   )
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [criandoAcesso, setCriandoAcesso] = useState(false)
 
   const troca = (c, v) => setF(a => ({ ...a, [c]: v }))
   const trocaModulo = (m, c, v) => setF(a => ({ ...a, [m]: { ...a[m], [c]: v } }))
   const novo = Boolean(pessoa.novo)
-  const ganhandoAcesso = f.acesso.temLogin && !pessoa.acesso?.temLogin
+  // Só cria conta quando foi pedido de propósito, nunca como efeito de salvar.
+  const ganhandoAcesso = criandoAcesso && !pessoa.acesso?.temLogin
 
   async function enviar () {
     setErro('')
@@ -257,7 +263,7 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
       ? (f.email || '').trim()
       : `${usuarioLogin.trim()}@${DOMINIO_INTERNO}`
 
-    if ((novo || ganhandoAcesso) && f.acesso.temLogin) {
+    if (novo ? f.acesso.temLogin : ganhandoAcesso) {
       if (!usarEmailProprio && !usuarioLogin.trim()) return setErro('Informe o nome de usuário.')
       if (usarEmailProprio && !email) return setErro('Informe o e-mail.')
       if (senhaPorNascimento && !f.nascimento) {
@@ -282,7 +288,9 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
       aoFechar={aoFechar}
       rodape={
         <>
-          {!novo && !souEu && <button className="btn secundario perigo" onClick={aoRemover}>Excluir</button>}
+          {!novo && !souEu && (
+            <button className="btn secundario perigo" onClick={aoRemover}>Excluir</button>
+          )}
           <button className="btn" onClick={enviar} disabled={salvando}>
             {salvando ? 'Salvando…' : 'Salvar'}
           </button>
@@ -290,6 +298,15 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
       }
     >
       <div className="campos">
+        {semelhantes.length > 0 && (
+          <div className="aviso-caixa">
+            Existe{semelhantes.length > 1 ? 'm' : ''} {semelhantes.length} outro
+            {semelhantes.length > 1 ? 's' : ''} cadastro{semelhantes.length > 1 ? 's' : ''} com
+            este mesmo nome. Se for a mesma pessoa, exclua os repetidos para não dividir o
+            histórico.
+          </div>
+        )}
+
         <div>
           <label className="rotulo">Nome completo</label>
           <input
@@ -412,14 +429,33 @@ function Formulario ({ pessoa, souEu, aoSalvar, aoFechar, aoRemover, aoEnviarRec
         {/* ---------- Acesso ---------- */}
 
         <div style={{ borderTop: '1px solid var(--borda)', paddingTop: 14, display: 'grid', gap: 12 }}>
-          <Marcador
-            rotulo="Tem acesso ao sistema"
-            dica="Prescritor que só precisa aparecer nas listas não precisa de acesso."
-            valor={f.acesso.temLogin}
-            aoTrocar={v => troca('acesso', { ...f.acesso, temLogin: v })}
-          />
+          {novo ? (
+            <Marcador
+              rotulo="Tem acesso ao sistema"
+              dica="Prescritor que só precisa aparecer nas listas não precisa de acesso."
+              valor={f.acesso.temLogin}
+              aoTrocar={v => troca('acesso', { ...f.acesso, temLogin: v })}
+            />
+          ) : f.acesso.temLogin ? (
+            <div className="info-caixa">
+              Esta pessoa entra no sistema com <b>{f.email || 'e-mail não informado'}</b>.
+            </div>
+          ) : (
+            <>
+              <div className="info-caixa">
+                Esta pessoa está cadastrada apenas para aparecer nas listas. Ela não entra
+                no sistema.
+              </div>
+              <button
+                className="btn secundario"
+                onClick={() => setCriandoAcesso(true)}
+              >
+                <Icone nome="cadeado" tamanho={18} /> Criar acesso para esta pessoa
+              </button>
+            </>
+          )}
 
-          {f.acesso.temLogin && (novo || ganhandoAcesso) && (
+          {(novo ? f.acesso.temLogin : ganhandoAcesso) && (
             <>
               <Marcador
                 rotulo="Esta pessoa tem e-mail"

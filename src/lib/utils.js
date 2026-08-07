@@ -183,7 +183,7 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.16'
+export const VERSAO = '1.17'
 
 /* =========================================================
    Relatório de estoque por período
