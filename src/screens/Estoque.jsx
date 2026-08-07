@@ -4,18 +4,9 @@ import { useDados } from '../lib/store'
 import { movimentosRecentes, itensComMovimento } from '../lib/db'
 import { useAuth } from '../lib/auth'
 import {
-  ORDENS_ESTOQUE, baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero,
+  FILTROS_RAPIDOS, ORDENS_ESTOQUE, baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero,
   precoDe, semAcento, siglaDaForma
 } from '../lib/utils'
-
-const FILTROS = [
-  { id: 'todos', rotulo: 'Tudo' },
-  { id: 'comSaldo', rotulo: 'Com saldo' },
-  { id: 'minimo', rotulo: 'Abaixo do mínimo' },
-  { id: 'validade', rotulo: 'Vencendo' },
-  { id: 'controlado', rotulo: 'Controlados' },
-  { id: 'frio', rotulo: 'Refrigerados' }
-]
 
 export default function Estoque () {
   const dados = useDados()
@@ -23,16 +14,18 @@ export default function Estoque () {
   const valores = useValores()
   const [estoqueId, setEstoqueId] = useState('')  // vazio = todos
   const [busca, setBusca] = useState('')
-  const [filtro, setFiltro] = useState('comSaldo')
+  const [filtro, setFiltro] = useState({ situacao: 'comSaldo', grupoATC: '', grupoFarmacologico: '' })
+  const [painelFiltros, setPainelFiltros] = useState(false)
   const [forma, setForma] = useState('')
   const [ordem, setOrdem] = useState('saldoDesc')
   const [movimentos, setMovimentos] = useState(null)
 
   // Só busca o histórico quando a ordenação por itens parados é pedida.
   useEffect(() => {
-    if (ordem !== 'semMovimento' || movimentos) return
+    const precisa = ordem === 'semMovimento' || filtro.situacao === 'semMovimento'
+    if (!precisa || movimentos) return
     itensComMovimento(365).then(setMovimentos).catch(() => setMovimentos({}))
-  }, [ordem, movimentos])
+  }, [ordem, filtro.situacao, movimentos])
   const [detalhe, setDetalhe] = useState(null)
 
   const saldoDoContexto = item =>
@@ -61,26 +54,25 @@ export default function Estoque () {
 
     return dados.itens
       .filter(i => {
+        if (i.pendente) return false
         if (forma && i.formaFarmaceutica !== forma) return false
         if (termo && !semAcento(
           [i.descricao, i.principioAtivo, i.codigo, i.grupoFarmacologico].join(' ')
         ).includes(termo)) return false
 
-        const saldo = saldoDoContexto(i)
-        const minimo = Number(i.estoqueMinimo) || 0
+        const lotesDoItem = dados.lotes.filter(l =>
+          l.itemId === i.id && l.qtd > 0 && l.validade &&
+          (!estoqueId || l.estoqueId === estoqueId)
+        )
 
-        if (filtro === 'comSaldo') return saldo > 0
-        if (filtro === 'minimo') return minimo > 0 && dados.saldoTotal(i.id) < minimo
-        if (filtro === 'controlado') return Boolean(i.controlado)
-        if (filtro === 'frio') return Boolean(i.termolabil)
-        if (filtro === 'validade') {
-          return dados.lotes.some(l =>
-            l.itemId === i.id && l.qtd > 0 && l.validade &&
-            (!estoqueId || l.estoqueId === estoqueId) &&
-            diasAte(l.validade) <= limite
-          )
-        }
-        return true
+        return passaNoFiltro(i, filtro, {
+          saldo: saldoDoContexto(i),
+          saldoTotal: dados.saldoTotal(i.id),
+          minimo: dados.minimoDoItem(i.id),
+          temLoteVencendo: lotesDoItem.some(l => diasAte(l.validade) <= limite),
+          temLoteVencido: lotesDoItem.some(l => diasAte(l.validade) < 0),
+          semMovimento: movimentos ? !movimentos[i.id] : false
+        })
       })
       .sort((a, b) => {
         if (ordem === 'alfabetica') return a.descricao.localeCompare(b.descricao, 'pt-BR')
@@ -178,12 +170,14 @@ export default function Estoque () {
       </div>
 
       <div className="pilulas">
-        {FILTROS.map(f => (
+        {FILTROS_RAPIDOS.map(f => (
           <button
-            key={f.id} className="pilula" aria-pressed={filtro === f.id}
-            onClick={() => setFiltro(f.id)}
+            key={f.id} className="pilula"
+            aria-pressed={filtro.situacao === f.id}
+            onClick={() => setFiltro(a => ({ ...a, situacao: f.id }))}
           >{f.rotulo}</button>
         ))}
+        <BotaoFiltros quantidade={contarFiltros(filtro)} aoAbrir={() => setPainelFiltros(true)} />
       </div>
 
       <div className="indicadores bloco" style={ehFarmaceutico ? undefined : { gridTemplateColumns: '1fr' }}>
@@ -215,7 +209,7 @@ export default function Estoque () {
         <div className="lista">
           {lista.map(i => {
             const saldo = saldoDoContexto(i)
-            const minimo = Number(i.estoqueMinimo) || 0
+            const minimo = dados.minimoDoItem(i.id)
             const total = dados.saldoTotal(i.id)
             const abaixo = minimo > 0 && total < minimo
             const proximo = dados.lotes
@@ -256,6 +250,14 @@ export default function Estoque () {
       <button className="btn secundario bloco-largo" style={{ marginTop: 16 }} onClick={exportar}>
         <Icone nome="baixar" tamanho={18} /> Exportar esta lista (CSV)
       </button>
+
+      {painelFiltros && (
+        <PainelFiltros
+          valor={filtro}
+          aoAplicar={setFiltro}
+          aoFechar={() => setPainelFiltros(false)}
+        />
+      )}
 
       {detalhe && (
         <DetalheItem

@@ -7,7 +7,8 @@ import { useDados } from '../lib/store'
 import { salvarLancamentos } from '../lib/db'
 import {
   ACOES_ESTOQUE, FINALIDADES_CONSUMO, MOTIVOS_ENTRADA, MOTIVOS_DESCARTE, MOTIVOS_DEVOLUCAO,
-  cpfValido, dataBR, formatarNumero, idAleatorio, mascaraCPF, vibrar
+  cpfValido, dataBR, formatarNumero, idAleatorio, mascaraCPF, nomeDaEmbalagem,
+  temEmbalagem, unidadesPorEmbalagem, vibrar
 } from '../lib/utils'
 
 const RASCUNHO = 'rascunho-movimentacao'
@@ -51,6 +52,8 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
   const [loteEscolhido, setLoteEscolhido] = useState(null)
   const [estornoDe, setEstornoDe] = useState('')
   const [maximoEstorno, setMaximoEstorno] = useState(0)
+  // Entrada de item que vem em caixa: digita-se caixas, grava-se unidades.
+  const [emEmbalagem, setEmEmbalagem] = useState(false)
 
   const [linhas, setLinhas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(RASCUNHO) || '[]') } catch { return [] }
@@ -129,6 +132,7 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
     setFinalidade(''); setPacienteNome(''); setPacienteCPF('')
     setPrescritor(null); setResponsavel(null); setDestinoInterno('')
     setLoteEscolhido(null); setMotivo(''); setEstornoDe(''); setMaximoEstorno(0)
+    setEmEmbalagem(false)
     setChaveBusca(k => k + 1)
   }
 
@@ -142,8 +146,9 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
     if (acao === 'descarte' && !motivo) return setErro('Informe o motivo do descarte.')
     if (acao === 'devolucao' && !motivo) return setErro('Informe o motivo da devolução.')
 
-    const quantidade = Number(String(qtd).replace(',', '.'))
-    if (!(quantidade > 0)) return setErro('Informe uma quantidade maior que zero.')
+    const digitado = Number(String(qtd).replace(',', '.'))
+    if (!(digitado > 0)) return setErro('Informe uma quantidade maior que zero.')
+    const quantidade = emEmbalagem ? digitado * unidadesPorEmbalagem(item) : digitado
     if (estornoDe && maximoEstorno && quantidade > maximoEstorno) {
       return setErro(`O estorno não pode passar de ${maximoEstorno} — é o que resta da saída original.`)
     }
@@ -319,14 +324,41 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
 
       {item && (
         <>
+          {temEmbalagem(item) && SOMA_AO_ESTOQUE.includes(acao) && (
+            <div className="bloco">
+              <label className="rotulo">Vou lançar em</label>
+              <div className="acao-grupo" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <button
+                  className="acao-btn consumo" aria-pressed={!emEmbalagem}
+                  onClick={() => setEmEmbalagem(false)} style={{ minHeight: 50 }}
+                >{item.unidade?.toLowerCase()}</button>
+                <button
+                  className="acao-btn consumo" aria-pressed={emEmbalagem}
+                  onClick={() => setEmEmbalagem(true)} style={{ minHeight: 50 }}
+                >{nomeDaEmbalagem(item).toLowerCase()} c/{unidadesPorEmbalagem(item)}</button>
+              </div>
+            </div>
+          )}
+
           <div className="bloco">
-            <label className="rotulo" htmlFor="qtd">Quantidade em {item.unidade?.toLowerCase()}</label>
+            <label className="rotulo" htmlFor="qtd">
+              Quantidade em {emEmbalagem
+                ? `${nomeDaEmbalagem(item).toLowerCase()} de ${unidadesPorEmbalagem(item)}`
+                : item.unidade?.toLowerCase()}
+            </label>
             <input
               id="qtd" ref={campoQtd} className="campo num" value={qtd}
               onChange={e => setQtd(e.target.value.replace(/[^\d.,]/g, ''))}
               onKeyDown={e => { if (e.key === 'Enter') adicionar() }}
               inputMode="decimal" placeholder="0" enterKeyHint="done"
             />
+            {emEmbalagem && qtd && (
+              <p className="dica" style={{ marginTop: 6 }}>
+                Entram <b>{formatarNumero(Number(String(qtd).replace(',', '.')) * unidadesPorEmbalagem(item))}</b>
+                {' '}{item.unidade?.toLowerCase()} no estoque.
+              </p>
+            )}
+
             <div className="pilulas" style={{ marginTop: 8, marginBottom: 0 }}>
               {[1, 5, 10, 20, 50, 100].map(n => (
                 <button

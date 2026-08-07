@@ -183,11 +183,53 @@ export const MOTIVOS_RECUSA = [
   'Outro'
 ]
 
-export const VERSAO = '1.21'
+export const VERSAO = '1.22'
 
 /* =========================================================
    Relatório de estoque por período
    ========================================================= */
+
+/* =========================================================
+   Filtros do estoque e do catálogo
+   ========================================================= */
+
+export const FILTROS_RAPIDOS = [
+  { id: 'comSaldo', rotulo: 'Com saldo' },
+  { id: 'minimo', rotulo: 'Abaixo do mínimo' },
+  { id: 'validade', rotulo: 'Vencendo' }
+]
+
+export const FILTROS_AVANCADOS = {
+  'Situação': [
+    { id: 'todos', rotulo: 'Tudo' },
+    { id: 'comSaldo', rotulo: 'Com saldo' },
+    { id: 'semSaldo', rotulo: 'Sem saldo' },
+    { id: 'minimo', rotulo: 'Abaixo do mínimo' },
+    { id: 'validade', rotulo: 'Vencendo' },
+    { id: 'vencido', rotulo: 'Vencido' },
+    { id: 'semMovimento', rotulo: 'Sem movimento no período' }
+  ],
+  'Classificação clínica': [
+    { id: 'antimicrobiano', rotulo: 'Antimicrobianos' },
+    { id: 'usoRestrito', rotulo: 'Antimicrobiano de uso restrito' },
+    { id: 'altaVigilancia', rotulo: 'Alta vigilância' },
+    { id: 'frio', rotulo: 'Refrigerados' }
+  ],
+  'Controle especial': [
+    { id: 'controlado', rotulo: 'Todos os controlados' },
+    { id: 'entorpecente', rotulo: 'Entorpecentes (A)' },
+    { id: 'psicotropico', rotulo: 'Psicotrópicos (B)' },
+    { id: 'outrosControle', rotulo: 'Demais sob controle (C)' }
+  ],
+  'Cadastro': [
+    { id: 'naoPadronizado', rotulo: 'Não padronizados' },
+    { id: 'foraContrato', rotulo: 'Fora do contrato' },
+    { id: 'semPreco', rotulo: 'Sem preço de contrato' }
+  ]
+}
+
+/** Antimicrobiano é todo o grupo J da classificação ATC. */
+export const ehAntimicrobiano = item => item?.grupoATC === 'J'
 
 export const CONTEUDOS_PERIODO = {
   saldo: 'Saldo no fim do mês',
@@ -273,8 +315,31 @@ export function sugerirUsuario (nome) {
  */
 export function precoDe (item) {
   const v = Number(item?.precoContrato)
-  return Number.isFinite(v) && v > 0 ? v : null
+  if (!Number.isFinite(v) || v <= 0) return null
+  // O contrato cobra pela embalagem; o estoque conta pela unidade de controle.
+  const porEmbalagem = Number(item?.embalagem?.qtd)
+  return porEmbalagem > 1 ? v / porEmbalagem : v
 }
+
+/** Quantas unidades de controle vêm em uma embalagem de compra. */
+export const unidadesPorEmbalagem = item => Math.max(1, Number(item?.embalagem?.qtd) || 1)
+
+export const temEmbalagem = item => unidadesPorEmbalagem(item) > 1
+
+export const nomeDaEmbalagem = item => item?.embalagem?.nome || 'CAIXA'
+
+export const EMBALAGENS = ['CAIXA', 'PACOTE', 'FRASCO', 'ROLO', 'KIT', 'FARDO', 'BANDEJA']
+
+/** Quantas unidades de controle vêm em cada embalagem de compra. */
+export const fatorEmbalagem = item => {
+  const n = Number(item?.embalagem?.qtd)
+  return n > 1 ? n : 1
+}
+
+export const nomeEmbalagem = item =>
+  String(item?.embalagem?.nome || 'CAIXA')
+
+
 
 export const TIPOS_MOVIMENTO = {
   entrada: { nome: 'Entrada', sinal: '+' },

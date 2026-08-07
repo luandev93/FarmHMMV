@@ -761,11 +761,14 @@ const COLUNAS = {
   grupoFarmacologico: ['grupo farmacologico'],
   grupoATC: ['grupo atc'],
   controlado: ['controle', 'controlado', 'controle especial'],
-  ativo: ['ativo', 'item ativo']
+  ativo: ['ativo', 'item ativo'],
+  embalagemNome: ['embalagem', 'embalagem de compra'],
+  embalagemQtd: ['embalagem quantidade', 'quantidade por embalagem', 'unidades por embalagem']
 }
 
 /** Colunas que chegam como "sim"/"não" e viram verdadeiro ou falso. */
 const BOOLEANOS = ['ativo']
+const NUMERICOS_EXTRA = ['embalagemQtd']
 
 const NUMERICOS = ['precoContrato', 'estoqueMinimo']
 
@@ -829,7 +832,11 @@ export function prepararImportacao (linhas, itens) {
       if (campo === 'codigo') return
       let v = String(linha[pos] ?? '').trim()
       if (v === '') return
-      if (BOOLEANOS.includes(campo)) {
+      if (NUMERICOS_EXTRA.includes(campo)) {
+        const numero = Number(String(v).replace(',', '.'))
+        if (!Number.isFinite(numero)) return
+        v = numero
+      } else if (BOOLEANOS.includes(campo)) {
         const t = SEM_ACENTO(v)
         v = ['sim', 'true', '1', 'x', 'verdadeiro'].includes(t)
       } else if (NUMERICOS.includes(campo)) {
@@ -839,6 +846,16 @@ export function prepararImportacao (linhas, itens) {
       }
       valores[campo] = v
     })
+
+    // As duas colunas de embalagem viram um campo só no item.
+    if (valores.embalagemNome !== undefined || valores.embalagemQtd !== undefined) {
+      valores.embalagem = {
+        nome: valores.embalagemNome || 'CAIXA',
+        qtd: Math.max(1, Number(valores.embalagemQtd) || 1)
+      }
+      delete valores.embalagemNome
+      delete valores.embalagemQtd
+    }
 
     const existente = porCodigo[SEM_ACENTO(codigo)]
 
@@ -852,6 +869,13 @@ export function prepararImportacao (linhas, itens) {
     const mudancas = {}
     Object.entries(valores).forEach(([campo, v]) => {
       const atual = existente[campo]
+      if (campo === 'embalagem') {
+        const atualEmb = existente.embalagem || {}
+        if (String(atualEmb.nome || '') === String(v.nome) &&
+            Number(atualEmb.qtd || 1) === Number(v.qtd)) return
+        mudancas[campo] = v
+        return
+      }
       const igual = BOOLEANOS.includes(campo)
         ? Boolean(atual !== false) === Boolean(v)
         : NUMERICOS.includes(campo)
@@ -1713,4 +1737,108 @@ export async function migrarMinimosParaLocal (estoqueId, ctx) {
   await setDoc(doc(db, 'config', 'app'), { minimosMigrados: true }, { merge: true })
   await registrarLog(ctx, 'minimos-migrados', `${n} mínimo(s) movidos para o local`)
   return n
+}
+
+/* =========================================================
+   Códigos do catálogo
+   ========================================================= */
+
+export const PREFIXO_POR_TIPO = {
+  MEDICAMENTO: 'MED',
+  MATERIAL: 'MAT',
+  NUTRICAO: 'NUT',
+  IMUNOBIOLOGICO: 'IMU',
+  OUTRO: 'OUT'
+}
+
+/** Próximo código livre do tipo, para o cadastro não depender de digitação. */
+export function proximoCodigo (tipo, itens) {
+  const prefixo = PREFIXO_POR_TIPO[tipo] || 'OUT'
+  const maior = itens
+    .map(i => String(i.codigo || ''))
+    .filter(c => c.startsWith(prefixo))
+    .map(c => Number(c.slice(prefixo.length)) || 0)
+    .reduce((a, b) => Math.max(a, b), 0)
+  return `${prefixo}${String(maior + 1).padStart(4, '0')}`
+}
+
+/**
+ * Renumera o catálogo em ordem alfabética, por tipo, e reescreve o código
+ * nos registros que o guardam. O vínculo real sempre foi pelo identificador
+ * do item; o código é o que a pessoa lê, e precisa continuar batendo.
+ */
+export async function renumerarCatalogo (ctx) {
+  const snap = await getDocs(collection(db, 'itens'))
+  const itens = snap.docs.map(d => ({ ...d.data(), id: d.id }))
+
+  // Agrupa por tipo e ordena pelo que a pessoa lê.
+  const porTipo = {}
+  itens.forEach(i => {
+    const p = PREFIXO_POR_TIPO[i.tipo] || 'OUT'
+    ;(porTipo[p] = porTipo[p] || []).push(i)
+  })
+
+  const novoCodigo = {}
+  Object.entries(porTipo).forEach(([prefixo, lista]) => {
+    lista
+      .sort((a, b) => String(a.descricao).localeCompare(String(b.descricao), 'pt-BR'))
+      .forEach((i, k) => {
+        const codigo = `${prefixo}${String(k + 1).padStart(4, '0')}`
+        if (i.codigo !== codigo) novoCodigo[i.id] = codigo
+      })
+  })
+
+  const mudaram = Object.keys(novoCodigo)
+  if (!mudaram.length) return { itens: 0, registros: 0 }
+
+  let lote = writeBatch(db)
+  let n = 0
+  let registros = 0
+  const comitar = async () => { if (n) { await lote.commit(); lote = writeBatch(db); n = 0 } }
+
+  for (const [id, codigo] of Object.entries(novoCodigo)) {
+    lote.update(doc(db, 'itens', id), { codigo, atualizadoEm: serverTimestamp() })
+    if (++n >= 400) await comitar()
+  }
+  await comitar()
+
+  // O código também é guardado junto de cada registro, para o histórico
+  // continuar legível mesmo que o item mude de nome depois.
+  for (const [colecao, campo] of [['movimentos', 'itemCodigo'], ['emprestimos', 'itemCodigo'],
+                                  ['catalogoPublico', 'codigo']]) {
+    const alvo = await getDocs(collection(db, colecao))
+    for (const d of alvo.docs) {
+      const item = d.data().itemId || d.id
+      const codigo = novoCodigo[item]
+      if (!codigo || d.data()[campo] === codigo) continue
+      lote.update(doc(db, colecao, d.id), { [campo]: codigo })
+      registros++
+      if (++n >= 400) await comitar()
+    }
+    await comitar()
+  }
+
+  // As requisições guardam os itens numa lista dentro do documento.
+  const solic = await getDocs(collection(db, 'solicitacoes'))
+  for (const d of solic.docs) {
+    const linhas = d.data().linhas || []
+    let mudou = false
+    const novas = linhas.map(l => {
+      const codigo = novoCodigo[l.itemId]
+      if (!codigo || l.codigo === codigo) return l
+      mudou = true
+      return { ...l, codigo }
+    })
+    if (!mudou) continue
+    lote.update(doc(db, 'solicitacoes', d.id), { linhas: novas })
+    registros++
+    if (++n >= 400) await comitar()
+  }
+  await comitar()
+
+  await registrarLog(
+    ctx, 'catalogo-renumerado',
+    `${mudaram.length} item(ns) renumerados em ordem alfabética e ${registros} registro(s) atualizados`
+  )
+  return { itens: mudaram.length, registros }
 }

@@ -1,14 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
 import { Confirmar, Icone, Painel, Vazio, useAviso } from '../components/ui'
+import { BotaoFiltros, PainelFiltros, contarFiltros, passaNoFiltro } from '../components/Filtros'
 import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import {
   salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao,
-  mesclarItens, aprovarItem, descartarProposta
+  mesclarItens, aprovarItem, descartarProposta, proximoCodigo, renumerarCatalogo
 } from '../lib/db'
 import {
-  CLASSES_CONTROLE, FORMAS_FARMACEUTICAS, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
-  baixarCSV, formasPorGrupo, formatarNumero, semAcento, siglaDaForma
+  CLASSES_CONTROLE, EMBALAGENS, FORMAS_FARMACEUTICAS, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
+  baixarCSV, formasPorGrupo, formatarMoeda, formatarNumero, precoDe, semAcento, siglaDaForma
 } from '../lib/utils'
 
 const VAZIO = {
@@ -19,6 +20,7 @@ const VAZIO = {
   precoMin: null, precoMax: null, precoContrato: null,
   marca: '', fornecedor: '', contrato: '', codigoContrato: '',
   estoqueMinimo: 0, ativo: true, foraDoContrato: false, padronizado: true,
+  embalagem: { nome: '', qtd: '' },
   exigePaciente: false, consumoInterno: false
 }
 
@@ -37,6 +39,9 @@ export default function Catalogo () {
   const [aplicando, setAplicando] = useState(false)
   const [mesclando, setMesclando] = useState(null)
   const [descartando, setDescartando] = useState(null)
+  const [filtro, setFiltro] = useState({ situacao: 'todos', grupoATC: '', grupoFarmacologico: '' })
+  const [painelFiltros, setPainelFiltros] = useState(false)
+  const [renumerando, setRenumerando] = useState(false)
   const arquivo = useRef(null)
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
@@ -46,15 +51,21 @@ export default function Catalogo () {
     return dados.itens.filter(i => {
       if (tipo === 'pendentes') return Boolean(i.pendente)
       if (i.pendente) return false
-      if (tipo === 'naoPadronizado') return i.padronizado === false
-      if (tipo === 'foraContrato') return Boolean(i.foraDoContrato)
       if (tipo && i.tipo !== tipo) return false
-      if (!t) return true
-      return semAcento(
+      if (t && !semAcento(
         [i.descricao, i.principioAtivo, i.codigo, i.grupoFarmacologico, i.marca].join(' ')
-      ).includes(t)
+      ).includes(t)) return false
+
+      return passaNoFiltro(i, filtro, {
+        saldo: dados.saldoTotal(i.id),
+        saldoTotal: dados.saldoTotal(i.id),
+        minimo: dados.minimoDoItem(i.id),
+        temLoteVencendo: false,
+        temLoteVencido: false,
+        semMovimento: false
+      })
     })
-  }, [dados.itens, busca, tipo])
+  }, [dados.itens, busca, tipo, filtro, dados])
 
   async function carregarPadrao () {
     setCarregandoPadrao(true)
@@ -109,18 +120,16 @@ export default function Catalogo () {
             {nome}
           </button>
         ))}
-        <button className="pilula" aria-pressed={tipo === 'naoPadronizado'} onClick={() => setTipo('naoPadronizado')}>
-          Não padronizados
-        </button>
-        <button className="pilula" aria-pressed={tipo === 'foraContrato'} onClick={() => setTipo('foraContrato')}>
-          Fora do contrato
-        </button>
+        <BotaoFiltros quantidade={contarFiltros(filtro)} aoAbrir={() => setPainelFiltros(true)} />
       </div>
 
       {ehFarmaceutico && (
         <>
           <div className="acoes bloco">
-            <button className="btn" onClick={() => setEditando({ ...VAZIO })}>
+            <button
+            className="btn"
+            onClick={() => setEditando({ ...VAZIO, codigo: proximoCodigo('MEDICAMENTO', dados.itens) })}
+          >
               <Icone nome="entrada" tamanho={18} /> Novo item
             </button>
             <button className="btn secundario" onClick={exportar}>
@@ -152,9 +161,33 @@ export default function Catalogo () {
             }}
           />
           {ehAdm && (
-            <button className="btn secundario bloco-largo bloco" onClick={() => arquivo.current?.click()}>
-              <Icone nome="etiqueta" tamanho={18} /> Importar planilha
-            </button>
+            <>
+              <button className="btn secundario bloco-largo bloco" onClick={() => arquivo.current?.click()}>
+                <Icone nome="etiqueta" tamanho={18} /> Importar planilha
+              </button>
+              <button
+                className="btn secundario bloco-largo bloco"
+                disabled={renumerando}
+                onClick={async () => {
+                  setRenumerando(true)
+                  try {
+                    const r = await renumerarCatalogo(ctx)
+                    avisar(
+                      r.itens
+                        ? `${r.itens} item(ns) renumerados e ${r.registros} registro(s) atualizados.`
+                        : 'Os códigos já estão em ordem.',
+                      'ok'
+                    )
+                  } catch (e) {
+                    avisar('Falhou: ' + e.message, 'erro')
+                  } finally {
+                    setRenumerando(false)
+                  }
+                }}
+              >
+                {renumerando ? 'Renumerando…' : 'Renumerar códigos em ordem alfabética'}
+              </button>
+            </>
           )}
         </>
       )}
@@ -192,6 +225,12 @@ export default function Catalogo () {
                 {i.pendente && <span className="etq atencao">aguardando aprovação</span>}
                 {i.foraDoContrato && <span className="etq atencao">fora do contrato</span>}
                 {i.padronizado === false && <span className="etq">não padronizado</span>}
+                {i.usoRestrito && <span className="etq alerta">uso restrito</span>}
+                {Number(i.embalagem?.qtd) > 1 && (
+                  <span className="etq">
+                    {i.embalagem.nome?.toLowerCase()} c/{i.embalagem.qtd}
+                  </span>
+                )}
                 {Number(i.estoqueMinimo) > 0 && <span>mín. {i.estoqueMinimo}</span>}
               </div>
             </div>
@@ -305,6 +344,7 @@ export default function Catalogo () {
         <FormularioItem
           item={editando}
           somenteLeitura={editando.id ? !ehAdm : !ehFarmaceutico}
+          todosItens={dados.itens}
           aoFechar={() => setEditando(null)}
           aoExcluir={() => { setExcluindo(editando); setEditando(null) }}
           aoMesclar={() => { setMesclando(editando); setEditando(null) }}
@@ -320,6 +360,15 @@ export default function Catalogo () {
             setEditando(null)
             avisar('Item salvo.', 'ok')
           }}
+        />
+      )}
+
+      {painelFiltros && (
+        <PainelFiltros
+          valor={filtro}
+          aoAplicar={setFiltro}
+          aoFechar={() => setPainelFiltros(false)}
+          comEstoque={false}
         />
       )}
 
@@ -379,7 +428,8 @@ export default function Catalogo () {
 }
 
 function FormularioItem ({
-  item, aoSalvar, aoFechar, aoExcluir, aoMesclar, aoAprovar, aoDescartar, ehAdm, somenteLeitura
+  item, aoSalvar, aoFechar, aoExcluir, aoMesclar, aoAprovar, aoDescartar, ehAdm,
+  somenteLeitura, todosItens = []
 }) {
   const [f, setF] = useState({ ...VAZIO, ...item })
   const [salvando, setSalvando] = useState(false)
@@ -399,7 +449,11 @@ function FormularioItem ({
         precoMin: numero(f.precoMin),
         precoMax: numero(f.precoMax),
         precoContrato: numero(f.precoContrato),
-        estoqueMinimo: Number(f.estoqueMinimo) || 0
+        estoqueMinimo: Number(f.estoqueMinimo) || 0,
+        embalagem: {
+          nome: f.embalagem?.nome || 'CAIXA',
+          qtd: Math.max(1, Number(f.embalagem?.qtd) || 1)
+        }
       })
     } catch (e) {
       setErro(e.message || 'Não foi possível salvar.')
@@ -469,7 +523,17 @@ function FormularioItem ({
             </div>
             <div>
               <label className="rotulo">Tipo</label>
-              <select className="campo" value={f.tipo} onChange={e => troca('tipo', e.target.value)}>
+              <select
+                className="campo" value={f.tipo}
+                onChange={e => {
+                  const tipo = e.target.value
+                  setF(a => ({
+                    ...a,
+                    tipo,
+                    codigo: item.id ? a.codigo : proximoCodigo(tipo, todosItens)
+                  }))
+                }}
+              >
                 {Object.entries(TIPOS_ITEM).map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
               </select>
             </div>
@@ -565,6 +629,42 @@ function FormularioItem ({
             <textarea className="campo" value={f.efeitosAdversos} onChange={e => troca('efeitosAdversos', e.target.value)} />
           </div>
 
+          <div style={{ border: '1.5px solid var(--borda)', borderRadius: 'var(--raio-p)', padding: 12, display: 'grid', gap: 12 }}>
+            <div>
+              <b style={{ fontSize: 14 }}>Embalagem de compra</b>
+              <p className="dica" style={{ marginTop: 3 }}>
+                Como o item chega do fornecedor. O estoque continua sendo contado em
+                {' '}{(f.unidade || 'unidade').toLowerCase()} — a embalagem serve para dar
+                entrada sem fazer conta.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 8 }}>
+              <select
+                className="campo" value={f.embalagem?.nome || 'CAIXA'}
+                onChange={e => troca('embalagem', { ...(f.embalagem || {}), nome: e.target.value })}
+              >
+                {EMBALAGENS.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+              <input
+                className="campo num" inputMode="numeric"
+                value={f.embalagem?.qtd ?? 1}
+                onChange={e => troca('embalagem', {
+                  ...(f.embalagem || {}),
+                  qtd: e.target.value.replace(/\D/g, '')
+                })}
+              />
+            </div>
+
+            <p className="dica">
+              1 {(f.embalagem?.nome || 'caixa').toLowerCase()} contém{' '}
+              <b>{Number(f.embalagem?.qtd) || 1} {(f.unidade || 'unidade').toLowerCase()}</b>.
+              {Number(f.embalagem?.qtd) > 1 && f.precoContrato
+                ? ` Preço de contrato ${formatarMoeda(Number(String(f.precoContrato).replace(',', '.')))} por ${(f.embalagem?.nome || 'caixa').toLowerCase()} — ${formatarMoeda(precoDe({ precoContrato: f.precoContrato, embalagem: f.embalagem }))} por ${(f.unidade || 'unidade').toLowerCase()}.`
+                : ' Deixe 1 quando o item já é comprado na mesma medida em que é dispensado.'}
+            </p>
+          </div>
+
           <div className="linha-campos">
             <div>
               <label className="rotulo">Estoque mínimo</label>
@@ -586,6 +686,48 @@ function FormularioItem ({
             Só o preço de contrato entra nos totais do sistema. Os campos de PMVG
             abaixo ficam guardados apenas como referência de mercado.
           </p>
+          <div style={{ border: '1.5px solid var(--borda)', borderRadius: 'var(--raio-p)', padding: 12, display: 'grid', gap: 12 }}>
+            <div>
+              <b style={{ fontSize: 14 }}>Embalagem de compra</b>
+              <p className="dica" style={{ marginTop: 3 }}>
+                Preencha quando o contrato vender numa embalagem e a farmácia dispensar
+                fracionado. O estoque continua sendo contado em {f.unidade?.toLowerCase()}.
+              </p>
+            </div>
+            <div className="linha-campos">
+              <div>
+                <label className="rotulo">Vem em</label>
+                <select
+                  className="campo" value={f.embalagem?.nome || ''}
+                  onChange={e => troca('embalagem', { ...(f.embalagem || {}), nome: e.target.value })}
+                >
+                  <option value="">Não se aplica</option>
+                  {EMBALAGENS.map(x => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="rotulo">Contendo</label>
+                <input
+                  className="campo num" inputMode="numeric"
+                  value={f.embalagem?.qtd ?? ''}
+                  onChange={e => troca('embalagem', {
+                    ...(f.embalagem || {}),
+                    qtd: e.target.value.replace(/\D/g, '')
+                  })}
+                  placeholder={`quantas ${f.unidade?.toLowerCase() || 'unidades'}`}
+                />
+              </div>
+            </div>
+            {Number(f.embalagem?.qtd) > 1 && Number(f.precoContrato) > 0 && (
+              <div className="info-caixa">
+                1 {(f.embalagem.nome || 'embalagem').toLowerCase()} = {f.embalagem.qtd}{' '}
+                {f.unidade?.toLowerCase()} · custo de{' '}
+                <b>{formatarMoeda(Number(f.precoContrato) / Number(f.embalagem.qtd))}</b> por{' '}
+                {f.unidade?.toLowerCase()}
+              </div>
+            )}
+          </div>
+
           <div className="linha-campos">
             <div>
               <label className="rotulo">PMVG mínimo (R$)</label>
@@ -630,6 +772,10 @@ function FormularioItem ({
             <Marcador
               rotulo="Consumo interno (nunca sai em nome de paciente)"
               valor={f.consumoInterno} aoTrocar={v => troca('consumoInterno', v)}
+            />
+            <Marcador
+              rotulo="Antimicrobiano de uso restrito"
+              valor={f.usoRestrito} aoTrocar={v => troca('usoRestrito', v)}
             />
             <Marcador rotulo="Item fora do contrato" valor={f.foraDoContrato} aoTrocar={v => troca('foraDoContrato', v)} />
             <Marcador
