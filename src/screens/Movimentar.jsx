@@ -20,6 +20,7 @@ const ICONES = {
   transferencia: 'transferencia',
   descarte: 'lixeira'
 }
+const TOTAL_ACOES_MANUAIS = Object.keys(ACOES_ESTOQUE).filter(acao => acao !== 'devolucao').length
 
 /* Tipos que somam ao estoque em vez de retirar. */
 const SOMA_AO_ESTOQUE = ['entrada', 'devolucao']
@@ -301,7 +302,7 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
               </button>
             ))}
         </div>
-        {acoesPermitidasNaUI.length > 0 && acoesPermitidasNaUI.length < 4 && (
+        {acoesPermitidasNaUI.length > 0 && acoesPermitidasNaUI.length < TOTAL_ACOES_MANUAIS && (
           <p className="dica" style={{ marginTop: 7 }}>
             {estoque?.nome} está configurado para{' '}
             {acoesPermitidasNaUI.map(a => ACOES_ESTOQUE[a].toLowerCase()).join(', ')}.
