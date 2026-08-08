@@ -11,6 +11,8 @@ export const config = {
   appId: import.meta.env.VITE_FB_APP_ID
 }
 
+console.log('FIREBASE CONFIG EM USO', config)
+
 export const configurado = Boolean(config.apiKey && config.projectId)
 
 export const app = initializeApp(config)
