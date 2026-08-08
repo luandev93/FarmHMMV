@@ -98,15 +98,21 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
   const estoque = dados.estoques.find(e => e.id === estoqueId)
   const destino = dados.estoques.find(e => e.id === destinoId)
   const acoesPermitidas = estoqueId ? dados.acoesDe(estoqueId) : []
+  const acoesPermitidasNaUI = useMemo(
+    () => acoesPermitidas.filter(acaoPermitida => acaoPermitida !== 'devolucao'),
+    [acoesPermitidas]
+  )
   const destinosPermitidos = estoqueId ? dados.destinosDe(estoqueId) : []
 
   // Se o local não aceitar a ação escolhida, cai na primeira que ele aceita.
   useEffect(() => {
-    if (acoesPermitidas.length && !acoesPermitidas.includes(acao)) {
-      setAcao(acoesPermitidas[0])
+    if (!acoesPermitidas.includes(acao)) {
+      const proximaAcao = acoesPermitidasNaUI[0] || acoesPermitidas[0]
+      if (!proximaAcao) return
+      setAcao(proximaAcao)
       setErro('')
     }
-  }, [estoqueId, acoesPermitidas, acao])
+  }, [estoqueId, acoesPermitidas, acoesPermitidasNaUI, acao])
 
   useEffect(() => {
     if (destinoId && !destinosPermitidos.some(d => d.id === destinoId)) setDestinoId('')
@@ -282,7 +288,7 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
         <label className="rotulo">O que você vai fazer</label>
         <div className="acao-grupo">
           {Object.entries(ACOES_ESTOQUE)
-            .filter(([id]) => acoesPermitidas.includes(id))
+            .filter(([id]) => id !== 'devolucao' && acoesPermitidas.includes(id))
             .map(([id, rotulo]) => (
               <button
                 key={id}
@@ -295,10 +301,10 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
               </button>
             ))}
         </div>
-        {acoesPermitidas.length < 4 && (
+        {acoesPermitidasNaUI.length > 0 && acoesPermitidasNaUI.length < 4 && (
           <p className="dica" style={{ marginTop: 7 }}>
             {estoque?.nome} está configurado para{' '}
-            {acoesPermitidas.map(a => ACOES_ESTOQUE[a].toLowerCase()).join(', ')}.
+            {acoesPermitidasNaUI.map(a => ACOES_ESTOQUE[a].toLowerCase()).join(', ')}.
           </p>
         )}
       </div>
