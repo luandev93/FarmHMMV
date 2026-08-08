@@ -176,15 +176,23 @@ export default function Estoque () {
         )}
       </div>
 
-      <div className="pilulas">
+            <div className="pilulas">
         {FILTROS_RAPIDOS.map(f => (
           <button
-            key={f.id} className="pilula"
+            key={f.id}
+            className="pilula"
             aria-pressed={filtro.situacao === f.id}
             onClick={() => setFiltro(a => ({ ...a, situacao: f.id }))}
-          >{f.rotulo}</button>
+          >
+            {f.rotulo}
+          </button>
         ))}
-        <BotaoFiltros quantidade={contarFiltros(filtro)} aoAbrir={() => setPainelFiltros(true)} />
+        <button
+          className="pilula"
+          onClick={() => setPainelFiltros(true)}
+        >
+          Filtros {contarFiltros(filtro) ? `(${contarFiltros(filtro)})` : ''}
+        </button>
       </div>
 
       <div className="indicadores bloco" style={ehFarmaceutico ? undefined : { gridTemplateColumns: '1fr' }}>
