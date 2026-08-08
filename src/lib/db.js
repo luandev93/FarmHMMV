@@ -513,7 +513,15 @@ async function gravarEmBlocos (operacoes) {
       else if (op.merge) bloco.set(op.ref, dados, { merge: true })
       else bloco.set(op.ref, dados)
     }
-        console.log('gravarEmBlocos COMMITANDO bloco', i, operacoes.slice(i, i + TAMANHO))
+    console.log(
+  'gravarEmBlocos COMMITANDO bloco DETALHADO',
+  operacoes.slice(i, i + TAMANHO).map(op => ({
+    tipo: op.tipo,
+    path: op.ref.path,
+    merge: op.merge || false,
+    dados: op.dados
+  }))
+)
     await bloco.commit()
         console.log('gravarEmBlocos COMMIT OK', i)
   }
