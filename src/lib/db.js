@@ -272,7 +272,7 @@ export function alocarPVPS (lotes, itemId, quantidade, loteEscolhido = null) {
  */
 export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
   if (!linhas.length) throw new Error('Não há lançamentos para salvar.')
-
+  console.log('salvarLancamentos INICIO', { linhas, ctx, opcoes })
   // Lotes atuais de cada local envolvido, lidos do servidor no momento de salvar.
   const locais = [...new Set(linhas.flatMap(l => [l.estoqueId, l.estoqueDestinoId].filter(Boolean)))]
   const porLocal = {}
@@ -466,8 +466,9 @@ export async function salvarLancamentos (linhas, ctx, opcoes = {}) {
       })
     }
   }
-
+  console.log('salvarLancamentos OPERACOES', operacoes.length, operacoes)
   await gravarEmBlocos(operacoes)
+        console.log('salvarLancamentos GRAVOU', operacoes.length)
   await registrarLog(
     ctx,
     'movimentacao',
@@ -502,6 +503,7 @@ function aplicarNaMemoria (lista, refId, linha, qtd) {
 }
 
 async function gravarEmBlocos (operacoes) {
+  console.log('gravarEmBlocos INICIO', operacoes.length)
   const TAMANHO = 400
   for (let i = 0; i < operacoes.length; i += TAMANHO) {
     const bloco = writeBatch(db)
@@ -511,7 +513,9 @@ async function gravarEmBlocos (operacoes) {
       else if (op.merge) bloco.set(op.ref, dados, { merge: true })
       else bloco.set(op.ref, dados)
     }
+        console.log('gravarEmBlocos COMMITANDO bloco', i, operacoes.slice(i, i + TAMANHO))
     await bloco.commit()
+        console.log('gravarEmBlocos COMMIT OK', i)
   }
 }
 
