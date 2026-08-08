@@ -16,13 +16,12 @@ export const configurado = Boolean(config.apiKey && config.projectId)
 export const app = initializeApp(config)
 export const auth = getAuth(app)
 
-// Cache local: o app continua respondendo quando a rede cai no corredor.
 export const db = initializeFirestore(app, {})
 
 /* Cria um usuário sem derrubar a sessão de quem está cadastrando.
    O Firebase troca o usuário logado ao chamar createUser, então usamos
    uma instância paralela e a descartamos em seguida. */
-export async function comAppParalelo(tarefa) {
+export async function comAppParalelo (tarefa) {
   const paralelo = initializeApp(config, 'paralelo-' + Date.now())
   try {
     return await tarefa(getAuth(paralelo))
