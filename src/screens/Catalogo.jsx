@@ -42,6 +42,7 @@ export default function Catalogo () {
   const [filtro, setFiltro] = useState({ situacao: 'todos', grupoATC: '', grupoFarmacologico: '' })
   const [painelFiltros, setPainelFiltros] = useState(false)
   const [renumerando, setRenumerando] = useState(false)
+  const [limiteExibicao, setLimiteExibicao] = useState(300)
   const arquivo = useRef(null)
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
@@ -212,8 +213,24 @@ export default function Catalogo () {
         {lista.length} item(ns){busca || tipo ? ' nesta busca' : ' no catálogo'}
       </p>
 
+      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ fontSize: 13, color: 'var(--texto-suave, #666)' }}>Exibir:</label>
+        <select
+          className="campo"
+          style={{ width: 'auto' }}
+          value={limiteExibicao === Infinity ? 'todos' : limiteExibicao}
+          onChange={e => setLimiteExibicao(e.target.value === 'todos' ? Infinity : Number(e.target.value))}
+        >
+          <option value={100}>100</option>
+          <option value={300}>300</option>
+          <option value={500}>500</option>
+          <option value={1000}>1000</option>
+          <option value="todos">Todos</option>
+        </select>
+      </div>
+
       <div className="lista">
-        {lista.slice(0, 300).map(i => (
+        {lista.slice(0, limiteExibicao).map(i => (
           <button key={i.id} className="linha-item" onClick={() => setEditando(i)}>
             <div className="corpo">
               <div className="nome" style={{ opacity: i.ativo === false ? .5 : 1 }}>{i.descricao}</div>
@@ -244,9 +261,9 @@ export default function Catalogo () {
         ))}
       </div>
 
-      {lista.length > 300 && (
+      {lista.length > limiteExibicao && (
         <p className="dica" style={{ marginTop: 10 }}>
-          Mostrando os 300 primeiros. Refine a busca para encontrar o restante.
+          Mostrando os {limiteExibicao} primeiros. Refine a busca ou aumente o limite para ver o restante.
         </p>
       )}
 
