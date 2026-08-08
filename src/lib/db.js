@@ -505,7 +505,7 @@ async function gravarEmBlocos (operacoes) {
   for (let i = 0; i < operacoes.length; i += TAMANHO) {
     const bloco = writeBatch(db)
     for (const op of operacoes.slice(i, i + TAMANHO)) {
-      const dados = semIndefinidos(op.dados)
+      const dados = op.dados
       if (op.tipo === 'add') bloco.set(doc(op.ref), dados)
       else if (op.merge) bloco.set(op.ref, dados, { merge: true })
       else bloco.set(op.ref, dados)
