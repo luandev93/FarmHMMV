@@ -5,7 +5,7 @@ import { movimentosRecentes, itensComMovimento } from '../lib/db'
 import { useAuth } from '../lib/auth'
 import {
   FILTROS_RAPIDOS, ORDENS_ESTOQUE, baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero,
-  precoDe, semAcento, siglaDaForma
+  precoDe, semAcento, siglaDaForma, passaNoFiltro
 } from '../lib/utils'
 
 export default function Estoque () {
