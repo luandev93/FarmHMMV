@@ -1,10 +1,6 @@
 import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager
-} from 'firebase/firestore'
+import { initializeFirestore } from 'firebase/firestore'
 
 export const config = {
   apiKey: import.meta.env.VITE_FB_API_KEY,
