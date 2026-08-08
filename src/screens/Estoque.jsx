@@ -7,7 +7,14 @@ import {
   FILTROS_RAPIDOS, ORDENS_ESTOQUE, baixarCSV, dataBR, dataHora, diasAte, formatarMoeda, formatarNumero,
   precoDe, semAcento, siglaDaForma, passaNoFiltro
 } from '../lib/utils'
-
+function contarFiltros (filtro) {
+  let total = 0
+  if (!filtro) return 0
+  if (filtro.situacao && filtro.situacao !== 'comSaldo' && filtro.situacao !== 'todos') total++
+  if (filtro.grupoATC) total++
+  if (filtro.grupoFarmacologico) total++
+  return total
+}
 export default function Estoque () {
   const dados = useDados()
   const { ehFarmaceutico } = useAuth()
