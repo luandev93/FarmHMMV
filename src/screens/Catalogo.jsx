@@ -68,7 +68,8 @@ export default function Catalogo () {
     }).sort((a, b) => {
       const ordem = String(a.descricao || '').localeCompare(String(b.descricao || ''), 'pt-BR', { sensitivity: 'base' })
       if (ordem !== 0) return ordemAlfabetica === 'asc' ? ordem : -ordem
-      return String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR', { sensitivity: 'base' })
+      const ordemCodigo = String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR', { sensitivity: 'base' })
+      return ordemAlfabetica === 'asc' ? ordemCodigo : -ordemCodigo
     })
   }, [dados.itens, busca, tipo, filtro, dados, ordemAlfabetica])
 
