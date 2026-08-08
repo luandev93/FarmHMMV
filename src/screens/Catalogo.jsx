@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth'
 import { useDados } from '../lib/store'
 import {
   salvarItem, excluirItem, semear, lerCSV, prepararImportacao, aplicarImportacao,
-  mesclarItens, aprovarItem, descartarProposta, proximoCodigo, renumerarCatalogo
+  mesclarItens, aprovarItem, descartarProposta, proximoCodigo
 } from '../lib/db'
 import {
   CLASSES_CONTROLE, EMBALAGENS, FORMAS_FARMACEUTICAS, GRUPOS_ATC, TIPOS_ITEM, UNIDADES,
@@ -41,8 +41,8 @@ export default function Catalogo () {
   const [descartando, setDescartando] = useState(null)
   const [filtro, setFiltro] = useState({ situacao: 'todos', grupoATC: '', grupoFarmacologico: '' })
   const [painelFiltros, setPainelFiltros] = useState(false)
-  const [renumerando, setRenumerando] = useState(false)
   const [limiteExibicao, setLimiteExibicao] = useState(300)
+  const [ordemAlfabetica, setOrdemAlfabetica] = useState('asc')
   const arquivo = useRef(null)
 
   const ctx = { uid: usuario.uid, nome: perfil.nome, funcao: perfil.farmacia?.funcao || '' }
@@ -65,8 +65,13 @@ export default function Catalogo () {
         temLoteVencido: false,
         semMovimento: false
       })
+    }).sort((a, b) => {
+      const ordem = String(a.descricao || '').localeCompare(String(b.descricao || ''), 'pt-BR', { sensitivity: 'base' })
+      if (ordem !== 0) return ordemAlfabetica === 'asc' ? ordem : -ordem
+      const ordemCodigo = String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR', { sensitivity: 'base' })
+      return ordemAlfabetica === 'asc' ? ordemCodigo : -ordemCodigo
     })
-  }, [dados.itens, busca, tipo, filtro, dados])
+  }, [dados.itens, busca, tipo, filtro, dados, ordemAlfabetica])
 
   async function carregarPadrao () {
     setCarregandoPadrao(true)
@@ -166,30 +171,6 @@ export default function Catalogo () {
               <button className="btn secundario bloco-largo bloco" onClick={() => arquivo.current?.click()}>
                 <Icone nome="etiqueta" tamanho={18} /> Importar planilha
               </button>
-              <button
-                className="btn secundario bloco-largo bloco"
-                disabled={renumerando}
-                onClick={async () => {
-                  setRenumerando(true)
-                  try {
-                    const r = await renumerarCatalogo(ctx)
-                    avisar(
-                      r.naoAtualizadas?.length
-                        ? `${r.itens} renumerados, mas ${r.naoAtualizadas.join(' e ')} ficaram sem atualizar por permissão.`
-                        : r.itens
-                          ? `${r.itens} item(ns) renumerados e ${r.registros} registro(s) atualizados.`
-                          : 'Os códigos já estão em ordem.',
-                      r.naoAtualizadas?.length ? 'erro' : 'ok'
-                    )
-                  } catch (e) {
-                    avisar('Falhou: ' + e.message, 'erro')
-                  } finally {
-                    setRenumerando(false)
-                  }
-                }}
-              >
-                {renumerando ? 'Renumerando…' : 'Renumerar códigos em ordem alfabética'}
-              </button>
             </>
           )}
         </>
@@ -213,7 +194,7 @@ export default function Catalogo () {
         {lista.length} item(ns){busca || tipo ? ' nesta busca' : ' no catálogo'}
       </p>
 
-      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 13, color: 'var(--texto-suave, #666)' }}>Exibir:</label>
         <select
           className="campo"
@@ -227,6 +208,15 @@ export default function Catalogo () {
           <option value={1000}>1000</option>
           <option value="todos">Todos</option>
         </select>
+        <button
+          className="btn secundario"
+          type="button"
+          aria-pressed={ordemAlfabetica === 'desc'}
+          onClick={() => setOrdemAlfabetica(atual => atual === 'asc' ? 'desc' : 'asc')}
+          style={{ flex: 'none', paddingInline: 14 }}
+        >
+          {ordemAlfabetica === 'asc' ? 'A→Z' : 'Z→A'}
+        </button>
       </div>
 
       <div className="lista">
