@@ -247,8 +247,10 @@ export default function Movimentar ({ estornoPendente, aoConsumirEstorno }) {
       limparFormulario()
       avisar(`${total} lançamento(s) gravados no estoque.`, 'ok')
     } catch (e) {
+      console.error('ERRO AO SALVAR LANCAMENTOS', e)
       setErro(e.message || 'Não foi possível salvar.')
       avisar('Nada foi gravado. Veja o aviso na tela.', 'erro')
+     
     } finally {
       setSalvando(false)
     }
