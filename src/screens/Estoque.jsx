@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BotaoFiltros, BotaoOlho, Icone, Painel, Vazio, ocultar, useValores } from '../components/ui'
+import { BotaoOlho, Icone, Painel, Vazio, ocultar, useValores } from '../components/ui'
 import { useDados } from '../lib/store'
 import { movimentosRecentes, itensComMovimento } from '../lib/db'
 import { useAuth } from '../lib/auth'
