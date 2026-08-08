@@ -635,3 +635,44 @@ export const MOTIVOS_ENTRADA = [
   'Ajuste inicial',
   'Outro'
 ]
+// Adiciona o filtro usado pela aba Estoque
+export function passaNoFiltro (item, filtro = {}, ctx = {}) {
+  // filtro esperado: { situacao, grupoATC, grupoFarmacologico, ... }
+  // ctx esperado (passado pelo componente): { saldo, saldoTotal, minimo, temLoteVencendo, temLoteVencido, semMovimento }
+
+  const { situacao = '', grupoATC = '', grupoFarmacologico = '' } = filtro
+
+  // filtros de grupo
+  if (grupoATC && item.grupoATC !== grupoATC) return false
+  if (grupoFarmacologico && item.grupoFarmacologico !== grupoFarmacologico) return false
+
+  const saldo = Number(ctx.saldo || 0)
+  const saldoTotal = Number(ctx.saldoTotal || 0)
+  const minimo = Number(ctx.minimo || 0)
+  const temLoteVencendo = !!ctx.temLoteVencendo
+  const temLoteVencido = !!ctx.temLoteVencido
+  const semMovimento = !!ctx.semMovimento
+
+  switch (situacao) {
+    case 'comSaldo':
+      return saldo > 0
+    case 'semSaldo':
+      return saldo <= 0
+    case 'minimo':
+      // mostra itens cujo total está abaixo do mínimo (se mínimo definido)
+      return minimo > 0 && saldoTotal < minimo
+    case 'validade':
+      return temLoteVencendo
+    case 'vencido':
+      return temLoteVencido
+    case 'semMovimento':
+      return semMovimento
+    case 'comMovimento':
+      return !semMovimento
+    case 'todos':
+    case '':
+      return true
+    default:
+      return true
+  }
+}
