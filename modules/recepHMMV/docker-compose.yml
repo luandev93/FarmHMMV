@@ -1,0 +1,63 @@
+version: "3.9"
+
+# ============================================================
+# docker-compose.yml — recepHMMV
+# Ambiente local: Postgres + Redis + serviço Recepção
+# Gratuito para uso local; custo zero em desenvolvimento.
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: recepcao
+      POSTGRES_PASSWORD: recepcao_dev
+      POSTGRES_DB: recepcao_hmmv
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recepcao -d recepcao_hmmv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    # Redis é reservado para sessões/cache/filas futuras
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  recepcao:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: ******postgres:5432/recepcao_hmmv?schema=public
+      JWT_SECRET: dev-insecure-secret-troque-em-producao
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:

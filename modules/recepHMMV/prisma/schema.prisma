@@ -1,0 +1,100 @@
+// ============================================================
+// prisma/schema.prisma — Módulo Recepção (recepHMMV)
+// Banco: PostgreSQL
+// Estratégia de migração: somente migrações aditivas (sem DROP)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// Paciente — dados cadastrais mínimos
+// CPF e CNS são únicos por si sós; ao menos um deve estar presente.
+// ------------------------------------------------------------
+model Paciente {
+  id             String    @id @default(uuid())
+  cpf            String?   @unique
+  cns            String?   @unique
+  nome           String
+  dataNascimento DateTime?
+  nomeMae        String?
+  municipio      String?
+  telefone       String?
+  email          String?
+  sexo           String?   // 'M' | 'F' | 'I'
+  ativo          Boolean   @default(true)
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+
+  atendimentos   Atendimento[]
+
+  @@map("pacientes")
+}
+
+// ------------------------------------------------------------
+// Atendimento — representa uma visita ao serviço de saúde
+// Estados: AGUARDANDO → EM_TRIAGEM → AGUARDANDO_MEDICO → TRANSFERIDO | CANCELADO
+// ------------------------------------------------------------
+model Atendimento {
+  id              String    @id @default(uuid())
+  pacienteId      String
+  tipo            String    @default("CONSULTA") // CONSULTA | URGENCIA | EMERGENCIA | RETORNO
+  queixaPrincipal String
+  estado          String    @default("AGUARDANDO")
+  criadoPor       String    // ID do usuário da recepção
+  correlationId   String?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
+
+  paciente        Paciente  @relation(fields: [pacienteId], references: [id])
+  filaEspera      FilaEspera?
+
+  @@map("atendimentos")
+}
+
+// ------------------------------------------------------------
+// FilaEspera — posição na fila com prioridade Manchester
+// saidaEm nulo = ainda aguardando; preenchido = saiu da fila
+// ------------------------------------------------------------
+model FilaEspera {
+  id             String    @id @default(uuid())
+  atendimentoId  String    @unique
+  prioridade     String    // VERMELHO | LARANJA | AMARELO | VERDE | AZUL
+  nivelNumerico  Int       // 1..5 para ordenação eficiente
+  queixaTriagem  String?
+  criadoEm      DateTime  @default(now())
+  saidaEm       DateTime?
+
+  atendimento    Atendimento @relation(fields: [atendimentoId], references: [id])
+
+  @@index([nivelNumerico, criadoEm]) // índice para consulta de fila ordenada
+  @@map("fila_espera")
+}
+
+// ------------------------------------------------------------
+// Auditoria — log imutável (sem update/delete via app)
+// Aplicar regra no banco: REVOKE UPDATE, DELETE ON auditoria FROM app_role
+// ------------------------------------------------------------
+model Auditoria {
+  id            String   @id @default(uuid())
+  acao          String   // ex.: PACIENTE_UPSERT, ATENDIMENTO_CRIADO
+  entidade      String
+  entidadeId    String?
+  usuarioId     String
+  funcao        String
+  payload       String?  // JSON serializado (sem dados sensíveis)
+  correlationId String?
+  ip            String?
+  criadoEm     DateTime @default(now())
+
+  @@index([entidade, entidadeId])
+  @@index([usuarioId])
+  @@index([criadoEm])
+  @@map("auditoria")
+}
