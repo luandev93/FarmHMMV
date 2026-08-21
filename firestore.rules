@@ -55,6 +55,7 @@ service cloud.firestore {
       allow update: if ehAdm()
         || (logado() && request.auth.uid == id
             && request.resource.data.farmacia == resource.data.farmacia
+            && request.resource.data.enfermagem.cargo == resource.data.enfermagem.cargo
             && request.resource.data.enfermagem.ativo == resource.data.enfermagem.ativo
             && request.resource.data.ativo == resource.data.ativo);
       allow delete: if ehAdm();
