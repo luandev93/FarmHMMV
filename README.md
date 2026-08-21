@@ -1219,3 +1219,12 @@ Objetivo:
 **MVP SaaS ERP Hospitalar HMMV — arquitetura modular, workflow hospitalar ponta a ponta, segurança, auditoria e interoperabilidade.**
 
 Este README funciona como **especificação funcional de alto nível do FarmHMMV** e deverá ser atualizado conforme os requisitos técnicos e a implementação evoluírem.
+
+---
+
+## Log de Alterações Operacionais
+
+> Seção viva: cada execução real (correção, deploy, CI) é registrada aqui de forma aditiva. Nunca remover entradas anteriores — apenas acrescentar.
+
+### 2026-08-21
+- fix(security): mescladas regras de Firestore da enfermagem (`ehEnfermagem`, `cargoEnfermagem`, `ehCoordenacao` + matches `/plantoes` e `/escalas`) no `firestore.rules` principal. Deploy validado no projeto Firebase `farmhmmv` (compilação e publicação sem erros).
