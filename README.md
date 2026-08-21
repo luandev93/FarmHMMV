@@ -1227,4 +1227,5 @@ Este README funciona como **especificação funcional de alto nível do FarmHMMV
 > Seção viva: cada execução real (correção, deploy, CI) é registrada aqui de forma aditiva. Nunca remover entradas anteriores — apenas acrescentar.
 
 ### 2026-08-21
+- ci: adicionado pipeline básico de build (`.github/workflows/ci.yml`) — checkout, setup-node 20, `npm ci`, lint/build/test opcionais via `--if-present`. Segue o mesmo padrão já aplicado em medHMMV e recepHMMV.
 - fix(security): mescladas regras de Firestore da enfermagem (`ehEnfermagem`, `cargoEnfermagem`, `ehCoordenacao` + matches `/plantoes` e `/escalas`) no `firestore.rules` principal. Deploy validado no projeto Firebase `farmhmmv` (compilação e publicação sem erros).
