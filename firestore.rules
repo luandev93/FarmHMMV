@@ -66,16 +66,13 @@ service cloud.firestore {
       // Não existe autocadastro: só o administrador libera acesso a alguém.
       allow create: if ehAdm();
       allow read: if ativo() || (logado() && request.auth.uid == uid);
-      allow update: if ehAdm()
-        || (logado() && request.auth.uid == uid
-            && request.resource.data.funcao == resource.data.funcao
-            && request.resource.data.ativo == resource.data.ativo);
+      allow update: if ehAdm();
       allow delete: if ehAdm();
     }
 
     // Configuração geral
     match /config/{doc} {
-      allow read: if logado();
+      allow read: if ativo();
       allow create: if ehAdm();
       allow update, delete: if ehAdm();
     }

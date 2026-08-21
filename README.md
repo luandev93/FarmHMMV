@@ -1227,6 +1227,9 @@ Este README funciona como **especificação funcional de alto nível do FarmHMMV
 > Seção viva: cada execução real (correção, deploy, CI) é registrada aqui de forma aditiva. Nunca remover entradas anteriores — apenas acrescentar.
 
 ### 2026-08-21
+- fix(security): `usuarios/{uid}` (modelo legado) — removida autoedição; agora só admin escreve, alinhado ao comentário original de que a coleção existe só para leitura durante a migração.
+- fix(security): `config/{doc}` — leitura restrita de `logado()` para `ativo()`; usuário autenticado mas não ativo não lê mais configuração geral.
+- docs(pendência): `saldos`/`lotes` permitem write direto por qualquer `operacional()` sem validação transacional contra `movimentos` — risco de integridade de estoque, não de acesso indevido. Requer refatoração para Cloud Functions com transação; não é fix de regra simples. Registrado para o roadmap.
 - fix(security): fechado escalonamento de privilégio em `pessoas/{id}` — `allow update` de auto-edição travava `enfermagem.ativo` mas não `enfermagem.cargo`, permitindo qualquer enfermeiro ativo se promover a `Coordenador(a) de Enfermagem`/`Admin` (write em `/escalas`, update/delete em qualquer `/plantoes`). Deploy validado no projeto `farmhmmv`.
 - ci: adicionado pipeline básico de build (`.github/workflows/ci.yml`) — checkout, setup-node 20, `npm ci`, lint/build/test opcionais via `--if-present`. Segue o mesmo padrão já aplicado em medHMMV e recepHMMV.
 - fix(security): mescladas regras de Firestore da enfermagem (`ehEnfermagem`, `cargoEnfermagem`, `ehCoordenacao` + matches `/plantoes` e `/escalas`) no `firestore.rules` principal. Deploy validado no projeto Firebase `farmhmmv` (compilação e publicação sem erros).
