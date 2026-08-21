@@ -1,38 +1,62 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function perfil() {
       return get(/databases/$(database)/documents/pessoas/$(request.auth.uid)).data;
     }
+
     function logado() {
       return request.auth != null;
     }
+
     function ativo() {
       return logado()
         && exists(/databases/$(database)/documents/pessoas/$(request.auth.uid))
         && perfil().ativo == true;
     }
+
     function funcao() {
       return (ativo() && perfil().farmacia.ativo) ? perfil().farmacia.funcao : 'nenhuma';
     }
+
     function ehAdm() { return funcao() == 'adm'; }
     function ehFarmaceutico() { return funcao() == 'adm' || funcao() == 'farmaceutico'; }
+
     // Quem opera o estoque de fato. A enfermagem não entra aqui.
     function operacional() {
       return funcao() == 'adm' || funcao() == 'farmaceutico' || funcao() == 'auxiliar';
     }
 
+    // --- Enfermagem -------------------------------------------------
+    function perfilEnfermagem() {
+      return perfil().enfermagem;
+    }
+
+    function ehEnfermagem() {
+      return ativo()
+        && perfilEnfermagem() != null
+        && perfilEnfermagem().ativo == true;
+    }
+
+    function cargoEnfermagem() {
+      return ehEnfermagem() ? perfilEnfermagem().cargo : 'nenhum';
+    }
+
+    function ehCoordenacao() {
+      return cargoEnfermagem() == 'Admin'
+        || cargoEnfermagem() == 'Coordenador(a) de Enfermagem';
+    }
+
     // Cadastro único: a mesma pessoa em todos os módulos.
     match /pessoas/{id} {
       allow create: if ehAdm();
-      allow read:   if ativo() || (logado() && request.auth.uid == id);
+      allow read: if ativo() || (logado() && request.auth.uid == id);
       allow update: if ehAdm()
-                    || (logado() && request.auth.uid == id
-                        && request.resource.data.farmacia == resource.data.farmacia
-                        && request.resource.data.enfermagem.ativo == resource.data.enfermagem.ativo
-                        && request.resource.data.ativo == resource.data.ativo);
+        || (logado() && request.auth.uid == id
+            && request.resource.data.farmacia == resource.data.farmacia
+            && request.resource.data.enfermagem.ativo == resource.data.enfermagem.ativo
+            && request.resource.data.ativo == resource.data.ativo);
       allow delete: if ehAdm();
     }
 
@@ -40,17 +64,17 @@ service cloud.firestore {
     match /usuarios/{uid} {
       // Não existe autocadastro: só o administrador libera acesso a alguém.
       allow create: if ehAdm();
-      allow read:   if ativo() || (logado() && request.auth.uid == uid);
+      allow read: if ativo() || (logado() && request.auth.uid == uid);
       allow update: if ehAdm()
-                    || (logado() && request.auth.uid == uid
-                        && request.resource.data.funcao == resource.data.funcao
-                        && request.resource.data.ativo == resource.data.ativo);
+        || (logado() && request.auth.uid == uid
+            && request.resource.data.funcao == resource.data.funcao
+            && request.resource.data.ativo == resource.data.ativo);
       allow delete: if ehAdm();
     }
 
     // Configuração geral
     match /config/{doc} {
-      allow read:   if logado();
+      allow read: if logado();
       allow create: if ehAdm();
       allow update, delete: if ehAdm();
     }
@@ -68,7 +92,7 @@ service cloud.firestore {
       // O farmacêutico propõe itens novos, sempre como pendentes;
       // corrigir, aprovar e excluir cadastro é do administrador.
       allow create: if ehAdm()
-                    || (ehFarmaceutico() && request.resource.data.pendente == true);
+        || (ehFarmaceutico() && request.resource.data.pendente == true);
       allow update, delete: if ehAdm();
     }
 
@@ -77,6 +101,7 @@ service cloud.firestore {
       allow read: if operacional();
       allow write: if operacional();
     }
+
     match /lotes/{id} {
       allow read: if operacional();
       allow write: if operacional();
@@ -84,14 +109,14 @@ service cloud.firestore {
 
     // Movimentações: imutáveis depois de gravadas
     match /movimentos/{id} {
-      allow read:   if operacional();
+      allow read: if operacional();
       allow create: if operacional();
       /* O histórico é imutável: a única alteração possível é o código do item,
          reescrito pela renumeração do catálogo para o registro continuar
          apontando para o item certo. Nada mais pode ser tocado. */
       allow update: if ehAdm()
-                    && request.resource.data.diff(resource.data)
-                         .affectedKeys().hasOnly(['itemCodigo']);
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['itemCodigo']);
       allow delete: if ehAdm();
     }
 
@@ -112,8 +137,8 @@ service cloud.firestore {
     match /solicitacoes/{id} {
       // Qualquer pessoa cadastrada cria, mas sempre como pendente e em seu próprio nome.
       allow create: if ativo()
-                    && request.resource.data.status == 'pendente'
-                    && request.resource.data.solicitanteUid == request.auth.uid;
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.solicitanteUid == request.auth.uid;
       // Só a farmácia lê e decide.
       allow read, update: if operacional();
       allow delete: if ehAdm();
@@ -126,9 +151,27 @@ service cloud.firestore {
       allow delete: if ehAdm();
     }
 
+    // Relatórios de plantão
+    match /plantoes/{id} {
+      allow read: if ehEnfermagem();
+      // Cria em seu próprio nome.
+      allow create: if ehEnfermagem()
+        && request.resource.data.authorId == request.auth.uid;
+      // Edita o que é seu; a coordenação edita qualquer um (conferência).
+      allow update: if ehEnfermagem()
+        && (resource.data.authorId == request.auth.uid || ehCoordenacao());
+      allow delete: if ehCoordenacao();
+    }
+
+    // Escala de plantões
+    match /escalas/{id} {
+      allow read: if ehEnfermagem();
+      allow write: if ehCoordenacao();
+    }
+
     // Auditoria: somente farmacêutico e adm leem
     match /logs/{id} {
-      allow read:   if ehFarmaceutico();
+      allow read: if ehFarmaceutico();
       allow create: if ativo();
       allow update, delete: if false;
     }
