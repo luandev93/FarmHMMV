@@ -1,10 +1,10 @@
-# FarmHMMV
+# farm
 
 # HMMV ERP Hospitalar — Módulo de Farmácia
 
 Sistema de gestão de farmácia hospitalar do ecossistema **HMMV ERP**, desenvolvido para controle de medicamentos e materiais hospitalares, estoque, lotes, validade, dispensação, consumo, inventário, rastreabilidade e auditoria.
 
-O `FarmHMMV` é um módulo independente, porém integrado ao restante do ERP Hospitalar HMMV.
+O `farm` é um módulo independente, porém integrado ao restante do ERP Hospitalar HMMV.
 
 Seu objetivo final é participar de um **workflow hospitalar ponta a ponta**, conectando:
 
@@ -34,7 +34,7 @@ INTEROPERABILIDADE SUS
 
 ---
 
-# 1. Papel do FarmHMMV no HMMV ERP
+# 1. Papel do farm no HMMV ERP
 
 O HMMV ERP é composto por módulos independentes:
 
@@ -43,16 +43,16 @@ O HMMV ERP é composto por módulos independentes:
 │                 HMMV ERP                      │
 ├───────────────────────────────────────────────┤
 │                                               │
-│  recepHMMV       Recepção                    │
-│  medHMMV         Médico                      │
-│  enfHMMV         Enfermagem                  │
-│  FarmHMMV        Farmácia                    │
-│  integra_SUS     Interoperabilidade SUS      │
+│  recep           Recepção                    │
+│  med             Médico                      │
+│  enf             Enfermagem                  │
+│  farm            Farmácia                    │
+│  integra-sus     Interoperabilidade SUS      │
 │                                               │
 └───────────────────────────────────────────────┘
 ```
 
-O FarmHMMV é responsável pelo ciclo de medicamentos e materiais dentro do hospital.
+O farm é responsável pelo ciclo de medicamentos e materiais dentro do hospital.
 
 Ele não deve conhecer diretamente a implementação interna dos demais módulos.
 
@@ -62,7 +62,7 @@ A comunicação deverá ocorrer através de **contratos internos versionados**.
 
 # 2. Objetivo
 
-O objetivo do FarmHMMV é fornecer controle operacional e gerencial sobre:
+O objetivo do farm é fornecer controle operacional e gerencial sobre:
 
 * medicamentos;
 * materiais hospitalares;
@@ -90,7 +90,7 @@ O sistema deve garantir que as movimentações possam ser rastreadas desde sua o
 
 # 3. Estado Atual
 
-O FarmHMMV já possui uma base funcional significativa.
+O farm já possui uma base funcional significativa.
 
 Entre as funcionalidades existentes/documentadas estão:
 
@@ -129,13 +129,13 @@ O objetivo deste SDD é evoluir essa base para um **módulo empresarial integrad
 A arquitetura desejada é:
 
 ```text
-FarmHMMV
+farm
     ↓
 Contrato Interno HMMV
     ↓
 Serviço de Integração
     ↓
-integra_SUS_HMMV
+integra-sus
     ↓
 Mapper
     ↓
@@ -146,7 +146,7 @@ Adapter governamental
 SUS / RNDS
 ```
 
-O FarmHMMV **não deverá se comunicar diretamente com a RNDS**.
+O farm **não deverá se comunicar diretamente com a RNDS**.
 
 Isso permite alterar uma integração governamental sem reescrever o núcleo da farmácia.
 
@@ -292,7 +292,7 @@ A aplicação deverá impedir ou alertar sobre a utilização inadequada de lote
 
 # 9. Consumo
 
-O FarmHMMV deverá distinguir diferentes tipos de consumo.
+O farm deverá distinguir diferentes tipos de consumo.
 
 Exemplos:
 
@@ -352,7 +352,7 @@ Setor
 
 # 11. Dispensação
 
-A dispensação representa uma operação central do FarmHMMV.
+A dispensação representa uma operação central do farm.
 
 Fluxo esperado:
 
@@ -389,27 +389,27 @@ Uma dispensação poderá estar vinculada a:
 
 # 12. Integração com o Módulo Médico
 
-O `medHMMV` será responsável pela prescrição.
+O `med` será responsável pela prescrição.
 
-O FarmHMMV deverá receber a prescrição através de contrato interno.
+O farm deverá receber a prescrição através de contrato interno.
 
 Fluxo:
 
 ```text
-medHMMV
+med
    ↓
 Prescrição
    ↓
 Contrato HMMV
    ↓
-FarmHMMV
+farm
    ↓
 Validação
    ↓
 Dispensação
 ```
 
-O FarmHMMV não deverá depender da estrutura interna do `medHMMV`.
+O farm não deverá depender da estrutura interna do `med`.
 
 ---
 
@@ -451,7 +451,7 @@ Profissional
 
 A recepção será responsável pela criação/identificação do paciente e atendimento.
 
-O FarmHMMV não deverá duplicar desnecessariamente o cadastro mestre de pacientes.
+O farm não deverá duplicar desnecessariamente o cadastro mestre de pacientes.
 
 Fluxo:
 
@@ -462,11 +462,11 @@ Paciente
    ↓
 Atendimento
    ↓
-medHMMV
+med
    ↓
 Prescrição
    ↓
-FarmHMMV
+farm
 ```
 
 O paciente deverá possuir identificador único dentro do ecossistema HMMV.
@@ -521,7 +521,7 @@ Estoque
 
 # 17. Pedidos e Reposição
 
-O FarmHMMV possui mecanismos relacionados a pedidos e sugestão de reposição.
+O farm possui mecanismos relacionados a pedidos e sugestão de reposição.
 
 A evolução deverá transformar essa funcionalidade em um processo formal:
 
@@ -635,7 +635,7 @@ Exemplo conceitual:
 
 ```json
 {
-  "module": "FarmHMMV",
+  "module": "farm",
   "operation": "DISPENSE",
   "resource": "Medication",
   "userId": "usuario",
@@ -793,16 +793,16 @@ version
 
 # 26. Integração SUS
 
-O FarmHMMV não deverá implementar diretamente integrações governamentais.
+O farm não deverá implementar diretamente integrações governamentais.
 
 Arquitetura:
 
 ```text
-FarmHMMV
+farm
      ↓
 Contrato interno
      ↓
-integra_SUS_HMMV
+integra-sus
      ↓
 Mapper
      ↓
@@ -819,7 +819,7 @@ Isso reduz o acoplamento e permite evolução independente.
 
 # 27. Dados e Identidade
 
-O FarmHMMV deverá utilizar identificadores consistentes com o ecossistema HMMV.
+O farm deverá utilizar identificadores consistentes com o ecossistema HMMV.
 
 Entidades importantes:
 
@@ -837,7 +837,7 @@ Lot
 Inventory
 ```
 
-Nem todas essas entidades precisam existir como recursos FHIR dentro do próprio FarmHMMV.
+Nem todas essas entidades precisam existir como recursos FHIR dentro do próprio farm.
 
 O módulo deve manter seu domínio operacional independente da representação externa.
 
@@ -845,7 +845,7 @@ O módulo deve manter seu domínio operacional independente da representação e
 
 # 28. MVP — Critérios Funcionais
 
-Para o MVP SaaS ERP Hospitalar, o FarmHMMV deverá contemplar:
+Para o MVP SaaS ERP Hospitalar, o farm deverá contemplar:
 
 ## Estoque
 
@@ -886,9 +886,9 @@ Evolução necessária:
 ## Integração
 
 * [ ] contrato com recepHMMV;
-* [ ] contrato com medHMMV;
+* [ ] contrato com med;
 * [ ] contrato com enfHMMV;
-* [ ] contrato com integra_SUS_HMMV;
+* [ ] contrato com integra-sus;
 * [ ] versionamento dos contratos;
 * [ ] correlation ID;
 * [ ] tratamento de falhas.
@@ -941,13 +941,13 @@ O cenário principal do MVP deverá ser:
 13. AUDITORIA
 ```
 
-O FarmHMMV deve ser capaz de participar desse fluxo sem duplicação desnecessária de dados.
+O farm deve ser capaz de participar desse fluxo sem duplicação desnecessária de dados.
 
 ---
 
 # 30. Critério de Aceitação do Módulo
 
-O FarmHMMV será considerado pronto para o MVP quando for possível executar um fluxo completo:
+O farm será considerado pronto para o MVP quando for possível executar um fluxo completo:
 
 ```text
 Paciente
@@ -994,7 +994,7 @@ Qual foi o resultado?
 
 ---
 
-# 31. Roadmap do FarmHMMV
+# 31. Roadmap do farm
 
 ## Fase 1 — Fundação
 
@@ -1045,7 +1045,7 @@ Qual foi o resultado?
 
 ## Fase 4 — Interoperabilidade
 
-**Status: dependente do integra_SUS_HMMV**
+**Status: dependente do integra-sus**
 
 * [ ] integração com gateway;
 * [ ] mapeamentos;
@@ -1076,7 +1076,7 @@ Qual foi o resultado?
 
 # 32. Definição de Pronto
 
-O FarmHMMV não será considerado concluído apenas porque as telas e operações básicas funcionam.
+O farm não será considerado concluído apenas porque as telas e operações básicas funcionam.
 
 A definição de pronto é:
 
@@ -1107,10 +1107,10 @@ PREPARADO PARA SaaS
 | Repositório        | Responsabilidade                                    |
 | ------------------ | --------------------------------------------------- |
 | `recepHMMV`        | paciente, recepção, atendimento e internação        |
-| `medHMMV`          | atendimento médico e prescrição                     |
+| `med`          | atendimento médico e prescrição                     |
 | `enfHMMV`          | assistência e administração de medicamentos         |
-| `FarmHMMV`         | estoque, dispensação e rastreabilidade farmacêutica |
-| `integra_SUS_HMMV` | interoperabilidade e integrações governamentais     |
+| `farm`         | estoque, dispensação e rastreabilidade farmacêutica |
+| `integra-sus` | interoperabilidade e integrações governamentais     |
 
 ---
 
@@ -1121,16 +1121,16 @@ PREPARADO PARA SaaS
                             │
           ┌─────────────────┼─────────────────┐
           │                 │                 │
-     recepHMMV          medHMMV          enfHMMV
+     recepHMMV          med          enfHMMV
           │                 │                 │
           └─────────────────┼─────────────────┘
                             │
                             ▼
-                       FarmHMMV
+                         farm
                             │
                             │
                             ▼
-                  integra_SUS_HMMV
+                    integra-sus
                             │
                      ┌──────┴──────┐
                      │             │
@@ -1150,7 +1150,7 @@ PREPARADO PARA SaaS
 ### Não acoplar módulos diretamente
 
 ```text
-FarmHMMV → RNDS
+farm → RNDS
 ```
 
 não é permitido.
@@ -1158,7 +1158,7 @@ não é permitido.
 O correto:
 
 ```text
-FarmHMMV → integra_SUS_HMMV → RNDS
+farm → integra-sus → RNDS
 ```
 
 ### Não alterar saldo sem evento
@@ -1185,7 +1185,7 @@ A documentação oficial vigente deverá ser utilizada quando a integração rea
 
 # 36. Objetivo Final
 
-Transformar o FarmHMMV de um sistema de gestão de farmácia em um **módulo empresarial de farmácia hospitalar integrado ao HMMV ERP**.
+Transformar o farm de um sistema de gestão de farmácia em um **módulo empresarial de farmácia hospitalar integrado ao HMMV ERP**.
 
 O resultado esperado:
 
@@ -1193,7 +1193,7 @@ O resultado esperado:
                    HMMV ERP
                        │
                        ▼
-                FarmHMMV
+                  farm
                        │
        ┌───────────────┼───────────────┐
        │               │               │
@@ -1218,7 +1218,7 @@ Objetivo:
 
 **MVP SaaS ERP Hospitalar HMMV — arquitetura modular, workflow hospitalar ponta a ponta, segurança, auditoria e interoperabilidade.**
 
-Este README funciona como **especificação funcional de alto nível do FarmHMMV** e deverá ser atualizado conforme os requisitos técnicos e a implementação evoluírem.
+Este README funciona como **especificação funcional de alto nível do farm** e deverá ser atualizado conforme os requisitos técnicos e a implementação evoluírem.
 
 ---
 
@@ -1231,5 +1231,5 @@ Este README funciona como **especificação funcional de alto nível do FarmHMMV
 - fix(security): `config/{doc}` — leitura restrita de `logado()` para `ativo()`; usuário autenticado mas não ativo não lê mais configuração geral.
 - docs(pendência): `saldos`/`lotes` permitem write direto por qualquer `operacional()` sem validação transacional contra `movimentos` — risco de integridade de estoque, não de acesso indevido. Requer refatoração para Cloud Functions com transação; não é fix de regra simples. Registrado para o roadmap.
 - fix(security): fechado escalonamento de privilégio em `pessoas/{id}` — `allow update` de auto-edição travava `enfermagem.ativo` mas não `enfermagem.cargo`, permitindo qualquer enfermeiro ativo se promover a `Coordenador(a) de Enfermagem`/`Admin` (write em `/escalas`, update/delete em qualquer `/plantoes`). Deploy validado no projeto `farmhmmv`.
-- ci: adicionado pipeline básico de build (`.github/workflows/ci.yml`) — checkout, setup-node 20, `npm ci`, lint/build/test opcionais via `--if-present`. Segue o mesmo padrão já aplicado em medHMMV e recepHMMV.
+- ci: adicionado pipeline básico de build (`.github/workflows/ci.yml`) — checkout, setup-node 20, `npm ci`, lint/build/test opcionais via `--if-present`. Segue o mesmo padrão já aplicado em med e recepHMMV.
 - fix(security): mescladas regras de Firestore da enfermagem (`ehEnfermagem`, `cargoEnfermagem`, `ehCoordenacao` + matches `/plantoes` e `/escalas`) no `firestore.rules` principal. Deploy validado no projeto Firebase `farmhmmv` (compilação e publicação sem erros).
